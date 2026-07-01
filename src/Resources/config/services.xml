@@ -22,6 +22,7 @@
             <argument type="service" id="Beliq\Shopware\Service\OrderAdapter"/>
             <argument type="service" id="Beliq\Shopware\Service\InvoiceMapper"/>
             <argument type="service" id="Beliq\Shopware\Service\DocumentStore"/>
+            <argument type="service" id="order.repository"/>
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber"/>
         </service>
