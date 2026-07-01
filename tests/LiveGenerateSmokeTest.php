@@ -51,11 +51,11 @@ final class LiveGenerateSmokeTest extends TestCase
     }
 
     /**
-     * Peppol BIS goes green for non-German parties. The generic Peppol ruleset does
-     * not require a seller contact (BG-6), which the UBL builder does not currently
-     * emit; the German national CIUS (DE-R-002) does require it, so German Peppol
-     * BIS is blocked on a beliq-engine fix (see ROADMAP.md). XRechnung is the
-     * supported German target.
+     * Uses non-German parties so the smoke stays green against whichever engine build
+     * the target API runs. A German (DE to DE) Peppol BIS invoice additionally needs
+     * the seller contact group (BG-6, rules DE-R-002/005/006/007); the plugin sends it
+     * and the engine emits it as cac:Contact (tobias-dev/bq-engine#119), so a German
+     * case validates green once that build is live. XRechnung is the other German target.
      */
     public function testPeppolBisFromANonGermanBusinessOrderValidatesGreen(): void
     {
