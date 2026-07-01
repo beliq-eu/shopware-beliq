@@ -12,6 +12,7 @@ use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\Price\Struct\CartPrice;
 use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTaxCollection;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
+use Shopware\Core\Checkout\Order\Aggregate\OrderCustomer\OrderCustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEntity;
 
@@ -27,6 +28,12 @@ use Shopware\Core\Checkout\Order\OrderEntity;
  */
 final class OrderAdapter
 {
+    /**
+     * Order custom field a merchant can set to route to a public-sector buyer:
+     * its Leitweg-ID becomes the buyer reference (BT-10). See ROADMAP.md.
+     */
+    private const BUYER_REFERENCE_FIELD = 'beliq_buyer_reference';
+
     public function toSourceOrder(OrderEntity $order, PluginConfig $config): SourceOrder
     {
         $taxStatus = $order->getTaxStatus() ?? $order->getPrice()->getTaxStatus();
@@ -55,16 +62,39 @@ final class OrderAdapter
         $flaggedBusiness = $accountType === CustomerEntity::ACCOUNT_TYPE_BUSINESS
             || $company !== null;
 
+        $number = $order->getOrderNumber() ?? '';
+
         return new SourceOrder(
-            number: $order->getOrderNumber() ?? '',
+            number: $number,
             issueDate: $order->getOrderDateTime()->format('Y-m-d'),
             currencyCode: $order->getCurrency()?->getIsoCode() ?? '',
             seller: $config->seller,
             buyer: $this->buildBuyer($order, $company, $vatId),
             lines: $lines,
+            paymentMeans: $config->paymentMeans?->withReference($number),
+            buyerReference: $this->buyerReference($order, $customer, $number),
             buyerFlaggedBusiness: $flaggedBusiness,
             zeroRateCategory: $config->zeroRateCategory,
         );
+    }
+
+    /**
+     * The buyer reference (BT-10). XRechnung requires it (BR-DE-1) and Peppol BIS
+     * accepts it in place of an order reference. A merchant routing to a public
+     * administration sets the buyer's Leitweg-ID in the order custom field; for a
+     * plain commercial order it falls back to the buyer's customer number, then to
+     * the order number, so the field is always present.
+     */
+    private function buyerReference(OrderEntity $order, ?OrderCustomerEntity $customer, string $orderNumber): string
+    {
+        $custom = $order->getCustomFields();
+        $leitweg = is_array($custom) ? ($custom[self::BUYER_REFERENCE_FIELD] ?? null) : null;
+
+        return $this->firstNonEmpty([
+            is_string($leitweg) ? $leitweg : null,
+            $customer?->getCustomerNumber(),
+            $orderNumber,
+        ]) ?? $orderNumber;
     }
 
     private function toSourceLine(OrderLineItemEntity $item, string $taxStatus): SourceLine

@@ -161,19 +161,46 @@ the generate body for those standards (sending `profile=en16931` there is a hard
 
 Open before Pass 1c is done:
 
-1. **XRechnung needs more fields than the mapper produces.** XRechnung (BR-DE) also
-   requires seller and buyer electronic addresses (BT-34 / BT-49), payment
-   instructions (BG-16), and a seller contact (BG-6). Until the mapper populates
-   these, the supported path is `zugferd` / `facturx` at the `en16931` profile;
-   `xrechnung` / `peppol-bis` reach the API cleanly (no profile 422) but still fail
-   validation on the missing BR-DE fields. Its own follow-up pass, since it adds
-   config fields and mapper work.
-2. Admin action to (re)generate for a single order. Regeneration also wants
+1. Admin action to (re)generate for a single order. Regeneration also wants
    idempotency: a `beliq_invoice` already exists per order, so a re-triggered paid
    transition currently logs a "document number already exists" error rather than
    replacing or skipping.
 
 Store submission is a separate operator step (below).
+
+### Pass 1d: XRechnung BR-DE field mapping (done)
+
+XRechnung now validates green end to end. The fields BR-DE adds beyond a bare
+EN 16931 body are mapped:
+
+- **Seller contact (BG-6):** `sellerContactName` (BT-41, BR-DE-5) and `sellerPhone`
+  (BT-42, BR-DE-6) config fields join the existing `sellerEmail` (BT-43, BR-DE-7) on
+  the seller `Party`.
+- **Payment means (BG-16):** a `paymentMeansCode` (58 SEPA credit transfer, default,
+  or 30 credit transfer) plus `sellerIban` / `sellerBic` / `sellerBankName`. The
+  payment means is assembled only when an IBAN is set, since BR-DE-23-a rejects a
+  code-58 transfer with no IBAN and a transfer with no account is not payable. The
+  order number becomes the payment reference (BT-83).
+- **Buyer reference (BT-10, BR-DE-1):** the adapter fills it from the order custom
+  field `beliq_buyer_reference` (a public-sector buyer's Leitweg-ID), falling back to
+  the buyer's customer number, then the order number, so it is always present.
+- **Electronic addresses (BT-34 / BT-49):** already produced by the engine, so no
+  plugin change was needed. For CII (XRechnung) the engine derives them from each
+  party's email (scheme `EM`); for UBL (Peppol BIS) from the party VAT id. The
+  adapter already carries the buyer email and VAT id, and the seller email / VAT id
+  come from config.
+
+Verified with a gated live smoke (`LiveGenerateSmokeTest`, run with `BELIQ_API_KEY`
++ `BELIQ_BASE_URL`): a German B2B order maps to `xrechnung`, generates, and validates
+green (zero errors) against the local api + engine.
+
+**Known limitation: German Peppol BIS.** Peppol BIS is green for non-German parties,
+but a German Peppol BIS invoice fails `DE-R-002` ("SELLER CONTACT (BG-6) shall be
+provided"). The cause is in the engine, not the plugin: `beliq-engine`'s UBL builder
+(`app/formats/ubl.py`) emits no `cac:Contact`, so the seller contact the plugin sends
+never reaches the UBL output. XRechnung (CII) is unaffected and is the supported
+German target. Making German Peppol BIS green is a beliq-engine follow-up (add
+`cac:Contact` emission to the UBL party builder, mirroring the CII builder).
 
 ## Operator-gated (post-go-live)
 
