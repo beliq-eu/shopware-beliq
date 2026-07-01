@@ -4,6 +4,7 @@ namespace Beliq\Shopware\Config;
 
 use Beliq\Shopware\Invoice\Address;
 use Beliq\Shopware\Invoice\Party;
+use Beliq\Shopware\Invoice\PaymentMeans;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -24,6 +25,10 @@ final class PluginConfigProvider
     private const TRIGGER_PAID = 'state_enter.order_transaction.state.paid';
     private const TRIGGER_COMPLETED = 'state_enter.order.state.completed';
 
+    /** UNTDID 4461 credit-transfer payment means. 58 is SEPA credit transfer. */
+    private const PAYMENT_MEANS_CODES = ['58', '30'];
+    private const DEFAULT_PAYMENT_MEANS_CODE = '58';
+
     public function __construct(private readonly SystemConfigService $systemConfig)
     {
     }
@@ -34,8 +39,9 @@ final class PluginConfigProvider
             'enabled', 'apiKey', 'baseUrl', 'standard', 'profile', 'output',
             'businessOnly', 'triggerEvent', 'zeroRateCategory',
             'sellerName', 'sellerVatId', 'sellerTaxId', 'sellerRegistrationId',
-            'sellerEmail', 'sellerStreet', 'sellerPostalCode', 'sellerCity',
-            'sellerCountryCode',
+            'sellerEmail', 'sellerContactName', 'sellerPhone',
+            'sellerStreet', 'sellerPostalCode', 'sellerCity', 'sellerCountryCode',
+            'paymentMeansCode', 'sellerIban', 'sellerBic', 'sellerBankName',
         ];
 
         $values = [];
@@ -91,6 +97,24 @@ final class PluginConfigProvider
             taxId: $nullable('sellerTaxId'),
             registrationId: $nullable('sellerRegistrationId'),
             email: $nullable('sellerEmail'),
+            phone: $nullable('sellerPhone'),
+            contactName: $nullable('sellerContactName'),
+        );
+
+        // The payment means (BG-16) needs an account to be payable: without an
+        // IBAN there is nothing to emit, and XRechnung's BR-DE-23-a rejects a
+        // credit transfer (code 58) that carries no IBAN. So it is assembled only
+        // when the merchant has configured a bank account.
+        $iban = $nullable('sellerIban');
+        $paymentMeansCode = $str('paymentMeansCode', self::DEFAULT_PAYMENT_MEANS_CODE);
+        if (!in_array($paymentMeansCode, self::PAYMENT_MEANS_CODES, true)) {
+            $paymentMeansCode = self::DEFAULT_PAYMENT_MEANS_CODE;
+        }
+        $paymentMeans = $iban === null ? null : new PaymentMeans(
+            typeCode: $paymentMeansCode,
+            iban: $iban,
+            bic: $nullable('sellerBic'),
+            bankName: $nullable('sellerBankName'),
         );
 
         return new PluginConfig(
@@ -104,6 +128,7 @@ final class PluginConfigProvider
             triggerEvent: $trigger,
             zeroRateCategory: $str('zeroRateCategory', self::DEFAULT_ZERO_RATE_CATEGORY),
             seller: $seller,
+            paymentMeans: $paymentMeans,
         );
     }
 }

@@ -17,6 +17,16 @@ final readonly class PaymentMeans
     ) {
     }
 
+    /**
+     * The seller's bank details are configured once; the payment reference (BT-83)
+     * is per-order. This returns a copy carrying that reference so the buyer can
+     * reconcile the payment.
+     */
+    public function withReference(string $paymentReference): self
+    {
+        return new self($this->typeCode, $this->iban, $this->bic, $this->bankName, $paymentReference);
+    }
+
     /** @return array<string, string> */
     public function toArray(): array
     {

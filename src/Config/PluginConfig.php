@@ -3,12 +3,15 @@
 namespace Beliq\Shopware\Config;
 
 use Beliq\Shopware\Invoice\Party;
+use Beliq\Shopware\Invoice\PaymentMeans;
 use Beliq\Shopware\Invoice\SourceOrder;
 
 /**
  * The merchant's plugin settings, resolved for one sales channel. The seller is
- * pre-assembled into a Party from the seller-legal fields. profile is null when
- * the merchant leaves it blank, letting the engine pick its default.
+ * pre-assembled into a Party from the seller-legal fields (name, address, VAT/tax
+ * ids, and the BG-6 contact); the seller's bank details become the paymentMeans
+ * template. profile is null when the merchant leaves it blank, letting the engine
+ * pick its default.
  */
 final readonly class PluginConfig
 {
@@ -29,6 +32,7 @@ final readonly class PluginConfig
         public string $triggerEvent,
         public string $zeroRateCategory,
         public Party $seller,
+        public ?PaymentMeans $paymentMeans = null,
     ) {
     }
 
