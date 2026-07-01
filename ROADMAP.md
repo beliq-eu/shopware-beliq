@@ -194,13 +194,16 @@ Verified with a gated live smoke (`LiveGenerateSmokeTest`, run with `BELIQ_API_K
 + `BELIQ_BASE_URL`): a German B2B order maps to `xrechnung`, generates, and validates
 green (zero errors) against the local api + engine.
 
-**Known limitation: German Peppol BIS.** Peppol BIS is green for non-German parties,
-but a German Peppol BIS invoice fails `DE-R-002` ("SELLER CONTACT (BG-6) shall be
-provided"). The cause is in the engine, not the plugin: `beliq-engine`'s UBL builder
-(`app/formats/ubl.py`) emits no `cac:Contact`, so the seller contact the plugin sends
-never reaches the UBL output. XRechnung (CII) is unaffected and is the supported
-German target. Making German Peppol BIS green is a beliq-engine follow-up (add
-`cac:Contact` emission to the UBL party builder, mirroring the CII builder).
+**German Peppol BIS.** A German (DE to DE) Peppol BIS invoice must carry the seller
+contact group (BG-6): `DE-R-002` requires the group and `DE-R-005`/`DE-R-006`/`DE-R-007`
+its name (BT-41), telephone (BT-42), and email (BT-43). The plugin sends the seller
+contact, and `beliq-engine` emits it as `cac:Contact` in the UBL output
+(`tobias-dev/bq-engine#119`), so a German Peppol BIS invoice validates green once that
+engine build is live on the target API. XRechnung (CII) carries the same contact and is
+the other supported German target.
+
+Follow-up once the engine build is in production: add a German `peppol-bis` case to
+`LiveGenerateSmokeTest` alongside the existing non-German one.
 
 ## Operator-gated (post-go-live)
 
