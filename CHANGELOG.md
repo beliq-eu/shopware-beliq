@@ -7,6 +7,12 @@
 - Shopware runtime wiring: an `OrderEntity` -> `SourceOrder` adapter (net
   conversion from gross/net/tax-free orders, per-line VAT rate, buyer from the
   billing address and customer), a typed settings layer with a business-only
-  scope, an order-state subscriber that generates on payment paid or order
-  completed, and document storage as a private media file linked on the order.
-  Admin settings via `config.xml`. Adapter and config mapping are unit tested.
+  scope, and an order-state subscriber that generates on payment paid or order
+  completed. Admin settings via `config.xml`. Adapter and config mapping are unit
+  tested.
+- First-class order document: the generated invoice is stored as a `beliq_invoice`
+  Shopware document through `DocumentGenerator` (custom document type registered by
+  a migration, plus a `BeliqInvoiceRenderer` that maps the order and calls the beliq
+  API). It appears on the order's Documents tab, downloadable, XML or hybrid PDF.
+- The `profile` field is omitted for `xrechnung` and `peppol-bis`, whose profile is
+  fixed by the standard (sending one is a hard `422`).

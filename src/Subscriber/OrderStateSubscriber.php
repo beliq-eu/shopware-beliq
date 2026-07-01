@@ -3,34 +3,29 @@
 namespace Beliq\Shopware\Subscriber;
 
 use Beliq\Shopware\Config\PluginConfigProvider;
-use Beliq\Shopware\Service\BeliqClient;
-use Beliq\Shopware\Service\DocumentStore;
-use Beliq\Shopware\Service\InvoiceMapper;
-use Beliq\Shopware\Service\OrderAdapter;
+use Beliq\Shopware\Document\BeliqInvoiceRenderer;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Checkout\Document\Service\DocumentGenerator;
+use Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation;
 use Shopware\Core\Checkout\Order\Event\OrderStateMachineStateChangeEvent;
-use Shopware\Core\Checkout\Order\OrderEntity;
-use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Generates a beliq invoice when an order reaches the configured state. The two
- * subscribed events are the sensible triggers (payment paid, order completed);
- * the merchant picks which one fires and the handler skips the other.
+ * Generates a beliq invoice document when an order reaches the configured state.
+ * The two subscribed events are the sensible triggers (payment paid, order
+ * completed); the merchant picks which one fires and the handler skips the other.
  *
- * A generation failure must never break the transition that triggered it, so the
- * handler swallows and logs every error rather than letting it propagate.
+ * The handler delegates to DocumentGenerator, which runs BeliqInvoiceRenderer (the
+ * order mapping and beliq API call) and stores the result as a first-class order
+ * document. A generation failure must never break the transition that triggered
+ * it, so the handler swallows and logs every error rather than letting it
+ * propagate.
  */
 final class OrderStateSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly PluginConfigProvider $configProvider,
-        private readonly OrderAdapter $adapter,
-        private readonly InvoiceMapper $mapper,
-        private readonly DocumentStore $documentStore,
-        private readonly EntityRepository $orderRepository,
+        private readonly DocumentGenerator $documentGenerator,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -45,7 +40,7 @@ final class OrderStateSubscriber implements EventSubscriberInterface
 
     public function onOrderState(OrderStateMachineStateChangeEvent $event): void
     {
-        $order = $event->getOrder();
+        $orderId = $event->getOrder()->getId();
 
         try {
             $config = $this->configProvider->get($event->getSalesChannelId());
@@ -56,52 +51,22 @@ final class OrderStateSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            // The order on the event carries only a shallow association set. The
-            // adapter reads the billing address (with its country), the line
-            // items, the customer account type, and the currency, so reload the
-            // order with those associations before mapping.
-            $order = $this->loadOrder($order->getId(), $event->getContext()) ?? $order;
+            $operation = new DocumentGenerateOperation($orderId, $config->expectedFileType());
 
-            $source = $this->adapter->toSourceOrder($order, $config);
-            if (!$config->allowsOrder($source)) {
-                return;
-            }
-
-            $body = $this->mapper->toGenerateBody(
-                $source,
-                $config->standard,
-                $config->output,
-                $config->profile,
-            );
-
-            $client = new BeliqClient($config->apiKey, $config->baseUrl);
-            $result = $client->generate($body);
-
-            $this->documentStore->store(
-                $order->getId(),
-                $source->number,
-                $result['bytes'],
-                $result['contentType'],
+            $result = $this->documentGenerator->generate(
+                BeliqInvoiceRenderer::TYPE,
+                [$orderId => $operation],
                 $event->getContext(),
             );
+
+            foreach ($result->getErrors() as $error) {
+                throw $error;
+            }
         } catch (\Throwable $e) {
             $this->logger->error('beliq invoice generation failed', [
-                'orderId' => $order->getId(),
+                'orderId' => $orderId,
                 'exception' => $e->getMessage(),
             ]);
         }
-    }
-
-    private function loadOrder(string $orderId, Context $context): ?OrderEntity
-    {
-        $criteria = new Criteria([$orderId]);
-        $criteria->addAssociation('lineItems');
-        $criteria->addAssociation('billingAddress.country');
-        $criteria->addAssociation('orderCustomer.customer');
-        $criteria->addAssociation('currency');
-
-        $order = $this->orderRepository->search($criteria, $context)->first();
-
-        return $order instanceof OrderEntity ? $order : null;
     }
 }
