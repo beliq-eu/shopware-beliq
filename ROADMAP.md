@@ -54,11 +54,12 @@ caveat that the merchant owns the tax treatment. Auto-detecting reverse charge i
 deliberately out of scope: getting it subtly wrong in a compliance tool is worse
 than not doing it.
 
-Follow-up (beliq-api, not this repo): add an optional `exemptionReasonCode` /
-`exemptionReasonText` to `taxSummary` entries so non-standard categories become
-expressible. Tracked as tobias-dev/bq-api#62. Until then the plugin surfaces
-zero-rate orders for merchant review rather than silently emitting an invoice that
-fails EN 16931 business rules.
+The beliq API now accepts an optional `exemptionReasonCode` / `exemptionReasonText`
+on `taxSummary` entries (tobias-dev/bq-api#62), so non-standard categories are
+expressible end to end. The plugin does not yet populate them: it still ships the
+standard-rated path and treats a zero rate as a merchant-configured category. Wiring
+a per-category exemption reason through `PluginConfig` and the mapper is a follow-up
+(see Pass 1c findings).
 
 ## Passes
 
@@ -121,13 +122,45 @@ cannot be exercised without a kernel + DB):
 
 ### Pass 1c: runtime smoke + first-class order document (needs a local Shopware)
 
-- Install into a Shopware 6.6+ instance and smoke the full path: place a B2B order,
-  transition it to paid, confirm the media file is written and linked on the order.
-- Promote storage from a `customFields` media reference to a first-class order
-  document (custom document type + `DocumentGenerator`) if the smoke shows the
-  media-only linkage is not discoverable enough in the admin.
-- Admin action to (re)generate for a single order.
-- Store submission is a separate operator step (below).
+Smoke run against a local Dockware Shopware 6.7 (PHP 8.3) with the plugin installed
+and activated, pointed at a local beliq API + engine. A real B2B order (company +
+VAT id) is placed through the Store API and its transaction transitioned to paid
+through the Admin API, firing `state_enter.order_transaction.state.paid`.
+
+What the smoke proves: the DI wiring resolves, the subscriber fires on the paid
+transition, and the adapter -> mapper -> client path reaches the API. With a
+`zugferd` / `en16931` document the engine generates and validates a green EN 16931
+document (HTTP 200), so the mapping produces a compliant invoice from a live order.
+
+Fixed here (bug the smoke found): the order on the state-change event carries only a
+shallow association set, so `getBillingAddress()` returned null and the buyer address
+serialized empty, which the API rejected. The subscriber now reloads the order with
+`billingAddress.country`, `lineItems`, `orderCustomer.customer`, and `currency` before
+mapping. Guarded by `OrderStateSubscriberTest`.
+
+Open before Pass 1c is done:
+
+1. **Document persistence must move off `MediaService::saveFile` in the transition.**
+   The state-change subscriber runs inside the transition's transaction. Calling
+   `MediaService::saveFile` there creates the media row but the follow-up
+   `findMediaById` inside `persistFileToMedia` cannot see it, so the file is never
+   written and the order link is never set. This is the promotion to a first-class
+   order document (custom document type + `DocumentGenerator`, which creates media
+   correctly inside the transition), or moving generation to an async message handler
+   that runs on a fresh context after the transition commits. Required, not optional.
+2. **Profile must not be sent for standards that pin their own.** The profile options
+   (`en16931` / `basicwl` / `extended`) apply to the ZUGFeRD / Factur-X family. For
+   `xrechnung` and `peppol-bis` the profile is fixed by the standard, and sending
+   `profile=en16931` is a hard `422` on every order. Omit `profile` for those
+   standards (or constrain the option per standard).
+3. **XRechnung needs more fields than the mapper produces.** XRechnung (BR-DE) also
+   requires seller and buyer electronic addresses (BT-34 / BT-49), payment
+   instructions (BG-16), and a seller contact (BG-6). Until the mapper populates
+   these, the supported path is `zugferd` / `facturx` at the `en16931` profile;
+   `xrechnung` / `peppol-bis` are not yet green end to end.
+4. Admin action to (re)generate for a single order.
+
+Store submission is a separate operator step (below).
 
 ## Operator-gated (post-go-live)
 
