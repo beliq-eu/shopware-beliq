@@ -9,8 +9,11 @@ and tax-authority reporting stay with your access point.
 
 The framework-agnostic core is implemented and tested: the order-to-EN 16931
 mapper (VAT category derivation, tax breakdown, EN 16931 rounding and totals) and
-the beliq API client. The Shopware runtime integration (order-event hook,
-document storage, admin settings) is the next milestone.
+the beliq API client. The Shopware runtime wiring is in place: an order-state
+subscriber runs the mapper and stores the generated document, driven by admin
+settings. The order-to-`SourceOrder` adapter and the config mapping are unit
+tested; the end-to-end path (subscriber firing, media storage) is verified on a
+running Shopware instance, which is the remaining smoke step.
 
 ## What it does
 
@@ -33,6 +36,21 @@ generation to all orders.
 Lines taxed at a standard rate are mapped to VAT category `S`. A zero-rated line
 takes a merchant-configured category (default `Z`). Cross-border reverse charge
 and intra-community supply are the merchant's call to configure; they are not auto-detected.
+
+## Setup
+
+In the plugin settings (Extensions -> beliq e-invoicing -> Configure):
+
+- Enter your beliq API key and, if needed, a custom API base URL.
+- Fill in the seller legal details (name, VAT ID, address). EN 16931 requires
+  them, so the seller block is the merchant's to complete.
+- Pick the document format (ZUGFeRD / Factur-X hybrid PDF by default), profile,
+  and whether to output a hybrid PDF or XML only.
+- Choose when to generate: on payment paid (default) or on order completed.
+- Turn on `Generate invoices automatically`. Generation is off until you do.
+
+The generated document is stored as a private media file and its id is recorded
+on the order's `customFields` (`beliq_invoice_media_id`).
 
 ## Requirements
 

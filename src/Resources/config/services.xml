@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
+
+    <services>
+        <service id="Beliq\Shopware\Service\InvoiceMapper"/>
+
+        <service id="Beliq\Shopware\Service\OrderAdapter"/>
+
+        <service id="Beliq\Shopware\Config\PluginConfigProvider">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
+
+        <service id="Beliq\Shopware\Service\DocumentStore">
+            <argument type="service" id="Shopware\Core\Content\Media\MediaService"/>
+            <argument type="service" id="order.repository"/>
+        </service>
+
+        <service id="Beliq\Shopware\Subscriber\OrderStateSubscriber">
+            <argument type="service" id="Beliq\Shopware\Config\PluginConfigProvider"/>
+            <argument type="service" id="Beliq\Shopware\Service\OrderAdapter"/>
+            <argument type="service" id="Beliq\Shopware\Service\InvoiceMapper"/>
+            <argument type="service" id="Beliq\Shopware\Service\DocumentStore"/>
+            <argument type="service" id="logger"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+    </services>
+</container>
