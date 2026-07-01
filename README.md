@@ -51,8 +51,9 @@ In the plugin settings (Extensions -> beliq e-invoicing -> Configure):
 - Choose when to generate: on payment paid (default) or on order completed.
 - Turn on `Generate invoices automatically`. Generation is off until you do.
 
-The generated document is stored as a private media file and its id is recorded
-on the order's `customFields` (`beliq_invoice_media_id`).
+The generated document is stored as a beliq e-invoice document on the order (its
+Documents tab), with its file kept as private media. It is downloadable there as
+XML or a hybrid PDF, depending on the format you chose.
 
 ## Requirements
 

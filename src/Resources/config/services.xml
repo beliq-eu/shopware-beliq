@@ -8,21 +8,24 @@
 
         <service id="Beliq\Shopware\Service\OrderAdapter"/>
 
+        <service id="Beliq\Shopware\Service\HttpClient" class="Beliq\Shopware\Service\CurlHttpClient"/>
+
         <service id="Beliq\Shopware\Config\PluginConfigProvider">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
         </service>
 
-        <service id="Beliq\Shopware\Service\DocumentStore">
-            <argument type="service" id="Shopware\Core\Content\Media\MediaService"/>
+        <service id="Beliq\Shopware\Document\BeliqInvoiceRenderer">
             <argument type="service" id="order.repository"/>
+            <argument type="service" id="Beliq\Shopware\Config\PluginConfigProvider"/>
+            <argument type="service" id="Beliq\Shopware\Service\OrderAdapter"/>
+            <argument type="service" id="Beliq\Shopware\Service\InvoiceMapper"/>
+            <argument type="service" id="Beliq\Shopware\Service\HttpClient"/>
+            <tag name="document.renderer"/>
         </service>
 
         <service id="Beliq\Shopware\Subscriber\OrderStateSubscriber">
             <argument type="service" id="Beliq\Shopware\Config\PluginConfigProvider"/>
-            <argument type="service" id="Beliq\Shopware\Service\OrderAdapter"/>
-            <argument type="service" id="Beliq\Shopware\Service\InvoiceMapper"/>
-            <argument type="service" id="Beliq\Shopware\Service\DocumentStore"/>
-            <argument type="service" id="order.repository"/>
+            <argument type="service" id="Shopware\Core\Checkout\Document\Service\DocumentGenerator"/>
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber"/>
         </service>

@@ -122,6 +122,41 @@ final class PluginConfigTest extends TestCase
         self::assertFalse($config->allowsOrder($this->orderFor(business: false)));
     }
 
+    public function testProfileIsOmittedForStandardsThatPinTheirOwn(): void
+    {
+        self::assertNull($this->configWith('xrechnung', 'en16931', 'xml')->effectiveProfile());
+        self::assertNull($this->configWith('peppol-bis', 'en16931', 'xml')->effectiveProfile());
+        self::assertSame('en16931', $this->configWith('zugferd', 'en16931', 'pdf')->effectiveProfile());
+        self::assertSame('extended', $this->configWith('facturx', 'extended', 'pdf')->effectiveProfile());
+    }
+
+    public function testExpectedFileTypeFollowsStandardThenOutput(): void
+    {
+        // XRechnung and Peppol BIS are always XML, whatever the output setting.
+        self::assertSame('xml', $this->configWith('xrechnung', 'en16931', 'pdf')->expectedFileType());
+        self::assertSame('xml', $this->configWith('peppol-bis', 'en16931', 'pdf')->expectedFileType());
+        // The ZUGFeRD / Factur-X family follows the output setting.
+        self::assertSame('pdf', $this->configWith('zugferd', 'en16931', 'pdf')->expectedFileType());
+        self::assertSame('xml', $this->configWith('zugferd', 'en16931', 'xml')->expectedFileType());
+        self::assertSame('pdf', $this->configWith('facturx', 'en16931', 'pdf')->expectedFileType());
+    }
+
+    private function configWith(string $standard, string $profile, string $output): PluginConfig
+    {
+        return new PluginConfig(
+            enabled: true,
+            apiKey: 'k',
+            baseUrl: 'https://api.beliq.eu',
+            standard: $standard,
+            profile: $profile,
+            output: $output,
+            businessOnly: true,
+            triggerEvent: 'state_enter.order_transaction.state.paid',
+            zeroRateCategory: 'Z',
+            seller: new Party('S', new Address('C', '1', 'DE')),
+        );
+    }
+
     private function orderFor(bool $business): SourceOrder
     {
         return new SourceOrder(
