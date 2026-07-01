@@ -25,6 +25,13 @@
       "Beliq\\Shopware\\Tests\\": "tests/"
     }
   },
+  "config": {
+    "allow-plugins": {
+      "symfony/flex": true,
+      "symfony/runtime": true,
+      "php-http/discovery": true
+    }
+  },
   "extra": {
     "shopware-plugin-class": "Beliq\\Shopware\\BeliqShopware",
     "label": {
