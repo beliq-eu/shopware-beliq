@@ -44,6 +44,19 @@
         <input-field type="text">
             <name>sellerEmail</name>
             <label>Contact e-mail</label>
+            <helpText>Also used as the seller electronic address (BT-34). XRechnung requires it (BR-DE-7).</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>sellerContactName</name>
+            <label>Contact person</label>
+            <label lang="de-DE">Ansprechpartner</label>
+            <helpText>Seller contact name (BG-6 / BT-41). Required by XRechnung (BR-DE-5).</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>sellerPhone</name>
+            <label>Contact phone</label>
+            <label lang="de-DE">Telefon</label>
+            <helpText>Seller contact telephone (BT-42). Required by XRechnung (BR-DE-6).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerStreet</name>
@@ -65,6 +78,44 @@
             <label>Country code (2 letters)</label>
             <label lang="de-DE">Laendercode (2 Buchstaben)</label>
             <placeholder>DE</placeholder>
+        </input-field>
+    </card>
+
+    <card>
+        <title>Payment details</title>
+        <title lang="de-DE">Zahlungsangaben</title>
+        <input-field type="single-select">
+            <name>paymentMeansCode</name>
+            <label>Payment means</label>
+            <label lang="de-DE">Zahlungsart</label>
+            <helpText>How the buyer pays (BG-16). An IBAN is required for either option; XRechnung rejects a SEPA credit transfer without one (BR-DE-23-a).</helpText>
+            <defaultValue>58</defaultValue>
+            <options>
+                <option>
+                    <id>58</id>
+                    <name>SEPA credit transfer</name>
+                    <name lang="de-DE">SEPA-Ueberweisung</name>
+                </option>
+                <option>
+                    <id>30</id>
+                    <name>Credit transfer</name>
+                    <name lang="de-DE">Ueberweisung</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="text">
+            <name>sellerIban</name>
+            <label>IBAN</label>
+            <helpText>The account the buyer pays into. Leave the payment fields empty to omit payment details; XRechnung then needs the buyer to have the bank details another way.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>sellerBic</name>
+            <label>BIC</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerBankName</name>
+            <label>Bank name</label>
+            <label lang="de-DE">Name der Bank</label>
         </input-field>
     </card>
 

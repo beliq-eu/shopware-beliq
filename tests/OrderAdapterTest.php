@@ -5,6 +5,7 @@ namespace Beliq\Shopware\Tests;
 use Beliq\Shopware\Config\PluginConfig;
 use Beliq\Shopware\Invoice\Address;
 use Beliq\Shopware\Invoice\Party;
+use Beliq\Shopware\Invoice\PaymentMeans;
 use Beliq\Shopware\Service\OrderAdapter;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
@@ -181,6 +182,85 @@ final class OrderAdapterTest extends TestCase
         self::assertEqualsWithDelta(7.0, $source->lines[1]->vatRate, 0.001);
     }
 
+    public function testBuyerReferenceComesFromLeitwegCustomField(): void
+    {
+        $order = $this->order(
+            taxStatus: CartPrice::TAX_STATE_NET,
+            lines: [$this->line('Item', 1, 100.0, [[19.0, 19.0, 100.0]], 'I-1')],
+            customer: $this->customer('b@ba.test', 'B', 'A', 'Behoerde', ['DE1'], CustomerEntity::ACCOUNT_TYPE_BUSINESS, 'C-9001'),
+            billing: $this->address('Amtsweg 1', '10115', 'Berlin', 'DE', 'Behoerde'),
+            customFields: ['beliq_buyer_reference' => '04011000-12345-67'],
+        );
+
+        $source = $this->adapter->toSourceOrder($order, $this->config());
+
+        // The Leitweg-ID wins over the customer and order numbers.
+        self::assertSame('04011000-12345-67', $source->buyerReference);
+    }
+
+    public function testBuyerReferenceFallsBackToCustomerNumber(): void
+    {
+        $order = $this->order(
+            taxStatus: CartPrice::TAX_STATE_NET,
+            lines: [$this->line('Item', 1, 100.0, [[19.0, 19.0, 100.0]], 'I-1')],
+            customer: $this->customer('b@x.test', 'B', 'X', 'BX', ['DE1'], CustomerEntity::ACCOUNT_TYPE_BUSINESS, 'C-9001'),
+            billing: $this->address('S 1', '10115', 'Berlin', 'DE', 'BX'),
+        );
+
+        $source = $this->adapter->toSourceOrder($order, $this->config());
+
+        self::assertSame('C-9001', $source->buyerReference);
+    }
+
+    public function testBuyerReferenceFallsBackToOrderNumber(): void
+    {
+        $order = $this->order(
+            taxStatus: CartPrice::TAX_STATE_NET,
+            lines: [$this->line('Item', 1, 100.0, [[19.0, 19.0, 100.0]], 'I-1')],
+            customer: $this->customer('b@x.test', 'B', 'X', 'BX', ['DE1'], CustomerEntity::ACCOUNT_TYPE_BUSINESS),
+            billing: $this->address('S 1', '10115', 'Berlin', 'DE', 'BX'),
+        );
+
+        $source = $this->adapter->toSourceOrder($order, $this->config());
+
+        self::assertSame('SW10001', $source->buyerReference);
+    }
+
+    public function testPaymentMeansCarriesTheOrderNumberAsReference(): void
+    {
+        $order = $this->order(
+            taxStatus: CartPrice::TAX_STATE_NET,
+            lines: [$this->line('Item', 1, 100.0, [[19.0, 19.0, 100.0]], 'I-1')],
+            customer: $this->customer('b@x.test', 'B', 'X', 'BX', ['DE1'], CustomerEntity::ACCOUNT_TYPE_BUSINESS),
+            billing: $this->address('S 1', '10115', 'Berlin', 'DE', 'BX'),
+        );
+
+        $config = $this->config(new PaymentMeans('58', 'DE89370400440532013000', 'COBADEFFXXX', 'Commerzbank'));
+        $source = $this->adapter->toSourceOrder($order, $config);
+
+        self::assertNotNull($source->paymentMeans);
+        self::assertSame('58', $source->paymentMeans->typeCode);
+        self::assertSame('DE89370400440532013000', $source->paymentMeans->iban);
+        self::assertSame('COBADEFFXXX', $source->paymentMeans->bic);
+        self::assertSame('Commerzbank', $source->paymentMeans->bankName);
+        // The configured template carries no reference; the adapter injects the order number (BT-83).
+        self::assertSame('SW10001', $source->paymentMeans->paymentReference);
+    }
+
+    public function testNoPaymentMeansWhenConfigHasNone(): void
+    {
+        $order = $this->order(
+            taxStatus: CartPrice::TAX_STATE_NET,
+            lines: [$this->line('Item', 1, 100.0, [[19.0, 19.0, 100.0]], 'I-1')],
+            customer: $this->customer('b@x.test', 'B', 'X', 'BX', ['DE1'], CustomerEntity::ACCOUNT_TYPE_BUSINESS),
+            billing: $this->address('S 1', '10115', 'Berlin', 'DE', 'BX'),
+        );
+
+        $source = $this->adapter->toSourceOrder($order, $this->config());
+
+        self::assertNull($source->paymentMeans);
+    }
+
     public function testLineWithoutCalculatedPriceFallsBackToEntityTotal(): void
     {
         $item = new OrderLineItemEntity();
@@ -205,7 +285,7 @@ final class OrderAdapterTest extends TestCase
         self::assertEqualsWithDelta(0.0, $source->lines[0]->vatRate, 0.001);
     }
 
-    private function config(): PluginConfig
+    private function config(?PaymentMeans $paymentMeans = null): PluginConfig
     {
         return new PluginConfig(
             enabled: true,
@@ -218,6 +298,7 @@ final class OrderAdapterTest extends TestCase
             triggerEvent: 'state_enter.order_transaction.state.paid',
             zeroRateCategory: 'Z',
             seller: new Party('Seller GmbH', new Address('Berlin', '10115', 'DE'), vatId: 'DE999999999'),
+            paymentMeans: $paymentMeans,
         );
     }
 
@@ -267,6 +348,7 @@ final class OrderAdapterTest extends TestCase
         ?string $company,
         array $vatIds,
         string $accountType,
+        ?string $customerNumber = null,
     ): OrderCustomerEntity {
         $customer = new CustomerEntity();
         $customer->setUniqueIdentifier(Uuid::randomHex());
@@ -282,6 +364,9 @@ final class OrderAdapterTest extends TestCase
         $orderCustomer->setVatIds($vatIds);
         if ($company !== null) {
             $orderCustomer->setCompany($company);
+        }
+        if ($customerNumber !== null) {
+            $orderCustomer->setCustomerNumber($customerNumber);
         }
         $orderCustomer->setCustomer($customer);
 
@@ -324,6 +409,7 @@ final class OrderAdapterTest extends TestCase
         array $lines = [],
         ?OrderLineItemCollection $lineItems = null,
         string $currency = 'EUR',
+        ?array $customFields = null,
     ): OrderEntity {
         $currencyEntity = new CurrencyEntity();
         $currencyEntity->setUniqueIdentifier(Uuid::randomHex());
@@ -340,6 +426,9 @@ final class OrderAdapterTest extends TestCase
         $order->setLineItems($lineItems ?? new OrderLineItemCollection($lines));
         $order->setOrderCustomer($customer);
         $order->setBillingAddress($billing);
+        if ($customFields !== null) {
+            $order->setCustomFields($customFields);
+        }
 
         return $order;
     }

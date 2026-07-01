@@ -45,10 +45,16 @@ final class PluginConfigTest extends TestCase
             'sellerTaxId' => '151/815/08150',
             'sellerRegistrationId' => 'HRB 1234',
             'sellerEmail' => 'billing@seller.test',
+            'sellerContactName' => 'Rechnungsstelle',
+            'sellerPhone' => '+49 30 1234567',
             'sellerStreet' => 'Marktplatz 1',
             'sellerPostalCode' => '80331',
             'sellerCity' => 'Muenchen',
             'sellerCountryCode' => 'de',
+            'paymentMeansCode' => '58',
+            'sellerIban' => 'DE89370400440532013000',
+            'sellerBic' => 'COBADEFFXXX',
+            'sellerBankName' => 'Commerzbank',
         ]);
 
         self::assertTrue($config->enabled);
@@ -67,10 +73,46 @@ final class PluginConfigTest extends TestCase
         self::assertSame('151/815/08150', $seller->taxId);
         self::assertSame('HRB 1234', $seller->registrationId);
         self::assertSame('billing@seller.test', $seller->email);
+        self::assertSame('Rechnungsstelle', $seller->contactName);
+        self::assertSame('+49 30 1234567', $seller->phone);
         self::assertSame('Marktplatz 1', $seller->address->street);
         self::assertSame('80331', $seller->address->postalCode);
         self::assertSame('Muenchen', $seller->address->city);
         self::assertSame('DE', $seller->address->countryCode);
+
+        $payment = $config->paymentMeans;
+        self::assertNotNull($payment);
+        self::assertSame('58', $payment->typeCode);
+        self::assertSame('DE89370400440532013000', $payment->iban);
+        self::assertSame('COBADEFFXXX', $payment->bic);
+        self::assertSame('Commerzbank', $payment->bankName);
+    }
+
+    public function testPaymentMeansIsNullWithoutIban(): void
+    {
+        // A bank name but no IBAN: nothing payable, so no payment means.
+        $config = PluginConfigProvider::fromValues([
+            'paymentMeansCode' => '58',
+            'sellerBankName' => 'Commerzbank',
+        ]);
+
+        self::assertNull($config->paymentMeans);
+    }
+
+    public function testUnknownPaymentMeansCodeFallsBackToSepaCreditTransfer(): void
+    {
+        $config = PluginConfigProvider::fromValues([
+            'paymentMeansCode' => '48',
+            'sellerIban' => 'DE89370400440532013000',
+        ]);
+
+        self::assertNotNull($config->paymentMeans);
+        self::assertSame('58', $config->paymentMeans->typeCode);
+    }
+
+    public function testDefaultsHaveNoPaymentMeans(): void
+    {
+        self::assertNull(PluginConfigProvider::fromValues([])->paymentMeans);
     }
 
     public function testUnknownOutputFallsBackToPdf(): void
