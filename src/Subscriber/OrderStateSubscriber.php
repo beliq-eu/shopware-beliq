@@ -9,6 +9,10 @@ use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Order\Event\OrderStateMachineStateChangeEvent;
+use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -26,6 +30,7 @@ final class OrderStateSubscriber implements EventSubscriberInterface
         private readonly OrderAdapter $adapter,
         private readonly InvoiceMapper $mapper,
         private readonly DocumentStore $documentStore,
+        private readonly EntityRepository $orderRepository,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -50,6 +55,12 @@ final class OrderStateSubscriber implements EventSubscriberInterface
             if ($event->getName() !== $config->triggerEvent) {
                 return;
             }
+
+            // The order on the event carries only a shallow association set. The
+            // adapter reads the billing address (with its country), the line
+            // items, the customer account type, and the currency, so reload the
+            // order with those associations before mapping.
+            $order = $this->loadOrder($order->getId(), $event->getContext()) ?? $order;
 
             $source = $this->adapter->toSourceOrder($order, $config);
             if (!$config->allowsOrder($source)) {
@@ -79,5 +90,18 @@ final class OrderStateSubscriber implements EventSubscriberInterface
                 'exception' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function loadOrder(string $orderId, Context $context): ?OrderEntity
+    {
+        $criteria = new Criteria([$orderId]);
+        $criteria->addAssociation('lineItems');
+        $criteria->addAssociation('billingAddress.country');
+        $criteria->addAssociation('orderCustomer.customer');
+        $criteria->addAssociation('currency');
+
+        $order = $this->orderRepository->search($criteria, $context)->first();
+
+        return $order instanceof OrderEntity ? $order : null;
     }
 }
