@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/trunk/src/Core/System/SystemConfig/Schema/config.xsd">
+
+    <card>
+        <title>beliq connection</title>
+        <title lang="de-DE">beliq-Verbindung</title>
+        <input-field type="password">
+            <name>apiKey</name>
+            <label>API key</label>
+            <label lang="de-DE">API-Schluessel</label>
+            <helpText>Your beliq API key. The free tier is enough to evaluate the plugin.</helpText>
+        </input-field>
+        <input-field type="url">
+            <name>baseUrl</name>
+            <label>API base URL</label>
+            <defaultValue>https://api.beliq.eu</defaultValue>
+        </input-field>
+    </card>
+
+    <card>
+        <title>Seller details</title>
+        <title lang="de-DE">Verkaeuferangaben</title>
+        <input-field type="text">
+            <name>sellerName</name>
+            <label>Legal name</label>
+            <label lang="de-DE">Firmenname</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerVatId</name>
+            <label>VAT ID</label>
+            <label lang="de-DE">USt-IdNr.</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerTaxId</name>
+            <label>Tax number</label>
+            <label lang="de-DE">Steuernummer</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerRegistrationId</name>
+            <label>Company registration number</label>
+            <label lang="de-DE">Handelsregisternummer</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerEmail</name>
+            <label>Contact e-mail</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerStreet</name>
+            <label>Street and number</label>
+            <label lang="de-DE">Strasse und Hausnummer</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerPostalCode</name>
+            <label>Postal code</label>
+            <label lang="de-DE">Postleitzahl</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerCity</name>
+            <label>City</label>
+            <label lang="de-DE">Ort</label>
+        </input-field>
+        <input-field type="text">
+            <name>sellerCountryCode</name>
+            <label>Country code (2 letters)</label>
+            <label lang="de-DE">Laendercode (2 Buchstaben)</label>
+            <placeholder>DE</placeholder>
+        </input-field>
+    </card>
+
+    <card>
+        <title>Invoice generation</title>
+        <title lang="de-DE">Rechnungserzeugung</title>
+        <input-field type="bool">
+            <name>enabled</name>
+            <label>Generate invoices automatically</label>
+            <label lang="de-DE">Rechnungen automatisch erzeugen</label>
+            <defaultValue>false</defaultValue>
+        </input-field>
+        <input-field type="single-select">
+            <name>standard</name>
+            <label>Document format</label>
+            <label lang="de-DE">Dokumentformat</label>
+            <defaultValue>zugferd</defaultValue>
+            <options>
+                <option>
+                    <id>zugferd</id>
+                    <name>ZUGFeRD / Factur-X (hybrid PDF)</name>
+                </option>
+                <option>
+                    <id>facturx</id>
+                    <name>Factur-X (hybrid PDF)</name>
+                </option>
+                <option>
+                    <id>xrechnung</id>
+                    <name>XRechnung (XML)</name>
+                </option>
+                <option>
+                    <id>peppol-bis</id>
+                    <name>Peppol BIS Billing (XML)</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="single-select">
+            <name>profile</name>
+            <label>Profile</label>
+            <defaultValue>en16931</defaultValue>
+            <options>
+                <option>
+                    <id>en16931</id>
+                    <name>EN 16931 (comfort)</name>
+                </option>
+                <option>
+                    <id>basicwl</id>
+                    <name>Basic WL</name>
+                </option>
+                <option>
+                    <id>extended</id>
+                    <name>Extended</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="single-select">
+            <name>output</name>
+            <label>Output</label>
+            <defaultValue>pdf</defaultValue>
+            <options>
+                <option>
+                    <id>pdf</id>
+                    <name>PDF (hybrid, where the format supports it)</name>
+                </option>
+                <option>
+                    <id>xml</id>
+                    <name>XML only</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="bool">
+            <name>businessOnly</name>
+            <label>Only for business orders</label>
+            <label lang="de-DE">Nur fuer Geschaeftskunden</label>
+            <helpText>Generate only when the buyer looks like a business (VAT ID, company, or business account). Turn off to generate for every order.</helpText>
+            <defaultValue>true</defaultValue>
+        </input-field>
+        <input-field type="single-select">
+            <name>triggerEvent</name>
+            <label>Generate when</label>
+            <label lang="de-DE">Erzeugen bei</label>
+            <defaultValue>state_enter.order_transaction.state.paid</defaultValue>
+            <options>
+                <option>
+                    <id>state_enter.order_transaction.state.paid</id>
+                    <name>Payment is marked paid</name>
+                </option>
+                <option>
+                    <id>state_enter.order.state.completed</id>
+                    <name>Order is completed</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="single-select">
+            <name>zeroRateCategory</name>
+            <label>VAT category for 0% lines</label>
+            <label lang="de-DE">USt-Kategorie fuer 0%-Positionen</label>
+            <helpText>The tax treatment for zero-rated lines is the merchant's call. Reverse charge and intra-community supply are not auto-detected.</helpText>
+            <defaultValue>Z</defaultValue>
+            <options>
+                <option>
+                    <id>Z</id>
+                    <name>Z - Zero rated</name>
+                </option>
+                <option>
+                    <id>E</id>
+                    <name>E - Exempt</name>
+                </option>
+                <option>
+                    <id>G</id>
+                    <name>G - Export outside the EU</name>
+                </option>
+            </options>
+        </input-field>
+    </card>
+</config>
