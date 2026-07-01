@@ -5,8 +5,9 @@ namespace Beliq\Shopware;
 use Shopware\Core\Framework\Plugin;
 
 /**
- * Plugin base class. The runtime wiring (order subscriber, document storage,
- * system config) lands in Pass 1b; see ROADMAP.md.
+ * Plugin base class. Shopware loads the runtime wiring (the order-state
+ * subscriber and services) from Resources/config/services.xml and the merchant
+ * settings from Resources/config/config.xml.
  */
 class BeliqShopware extends Plugin
 {
