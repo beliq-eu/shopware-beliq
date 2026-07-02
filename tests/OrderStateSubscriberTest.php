@@ -4,6 +4,7 @@ namespace Beliq\Shopware\Tests;
 
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
+use Beliq\Shopware\Document\InvoiceDocumentLookup;
 use Beliq\Shopware\Subscriber\OrderStateSubscriber;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -13,6 +14,9 @@ use Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation;
 use Shopware\Core\Checkout\Order\Event\OrderStateMachineStateChangeEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
@@ -91,6 +95,18 @@ final class OrderStateSubscriberTest extends TestCase
         );
     }
 
+    public function testDoesNotRegenerateWhenABeliqDocumentAlreadyExists(): void
+    {
+        $generator = $this->createMock(DocumentGenerator::class);
+        $generator->expects(self::never())->method('generate');
+
+        // A re-fired paid transition on an order that already has a beliq invoice
+        // must be a no-op, not a duplicate document (and not a document-number clash).
+        $this->subscriber($generator, existingCount: 1)->onOrderState(
+            new OrderStateMachineStateChangeEvent(self::TRIGGER, $this->order(), Context::createDefaultContext()),
+        );
+    }
+
     public function testSwallowsGenerationErrorsSoCheckoutIsNeverBroken(): void
     {
         $result = new DocumentGenerationResult();
@@ -118,13 +134,24 @@ final class OrderStateSubscriberTest extends TestCase
         return $order;
     }
 
-    private function subscriber(DocumentGenerator $generator, bool $enabled = true, string $apiKey = 'blq_test'): OrderStateSubscriber
+    private function subscriber(DocumentGenerator $generator, bool $enabled = true, string $apiKey = 'blq_test', int $existingCount = 0): OrderStateSubscriber
     {
         return new OrderStateSubscriber(
             $this->configProvider($enabled, $apiKey),
             $generator,
+            $this->lookup($existingCount),
             new NullLogger(),
         );
+    }
+
+    private function lookup(int $count): InvoiceDocumentLookup
+    {
+        $documentRepository = $this->createMock(EntityRepository::class);
+        $documentRepository->method('searchIds')->willReturnCallback(
+            static fn (Criteria $criteria, Context $context): IdSearchResult => new IdSearchResult($count, [], $criteria, $context),
+        );
+
+        return new InvoiceDocumentLookup($documentRepository);
     }
 
     private function configProvider(bool $enabled, string $apiKey): PluginConfigProvider

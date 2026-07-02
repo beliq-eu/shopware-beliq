@@ -4,6 +4,7 @@ namespace Beliq\Shopware\Subscriber;
 
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
+use Beliq\Shopware\Document\InvoiceDocumentLookup;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Document\Service\DocumentGenerator;
 use Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation;
@@ -26,6 +27,7 @@ final class OrderStateSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly PluginConfigProvider $configProvider,
         private readonly DocumentGenerator $documentGenerator,
+        private readonly InvoiceDocumentLookup $documents,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -48,6 +50,13 @@ final class OrderStateSubscriber implements EventSubscriberInterface
                 return;
             }
             if ($event->getName() !== $config->triggerEvent) {
+                return;
+            }
+
+            // Automatic generation never overwrites an existing beliq invoice, so a
+            // re-fired transition is a no-op. An explicit regenerate from the order's
+            // Documents card still works and gets its own document number.
+            if ($this->documents->countForOrder($orderId, $event->getContext()) > 0) {
                 return;
             }
 

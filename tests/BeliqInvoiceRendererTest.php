@@ -4,6 +4,7 @@ namespace Beliq\Shopware\Tests;
 
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
+use Beliq\Shopware\Document\InvoiceDocumentLookup;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
 use Beliq\Shopware\Tests\Support\FakeHttpClient;
@@ -26,6 +27,7 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\Currency\CurrencyEntity;
@@ -84,6 +86,25 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame('application/pdf', $doc->getContentType());
     }
 
+    public function testRegenerateUsesADistinctDocumentNumberWhenOneAlreadyExists(): void
+    {
+        $bytes = '<?xml version="1.0"?><Invoice>beliq</Invoice>';
+        $http = new FakeHttpClient(['status' => 200, 'body' => $bytes, 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+
+        // One beliq invoice already exists for the order. A regenerate must not reuse
+        // SW10042 (Shopware rejects a duplicate document number), so it takes the next
+        // distinct number instead of failing.
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingCount: 1)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        $doc = $result->getOrderSuccess($order->getId());
+        self::assertNotNull($doc);
+        self::assertSame('SW10042-2', $doc->getNumber());
+        self::assertSame('invoice-SW10042-2', $doc->getName());
+        self::assertSame('SW10042-2', $doc->getConfig()['documentNumber'] ?? null);
+    }
+
     public function testXrechnungOmitsTheProfileInTheGenerateBody(): void
     {
         $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
@@ -130,7 +151,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame(BeliqInvoiceRenderer::TYPE, $this->renderer($order, $this->config('zugferd', 'xml'), $http)->supports());
     }
 
-    private function renderer(OrderEntity $order, PluginConfigProvider $configProvider, FakeHttpClient $http): BeliqInvoiceRenderer
+    private function renderer(OrderEntity $order, PluginConfigProvider $configProvider, FakeHttpClient $http, int $existingCount = 0): BeliqInvoiceRenderer
     {
         $orderRepository = $this->createMock(EntityRepository::class);
         $orderRepository->method('search')->willReturnCallback(
@@ -149,8 +170,19 @@ final class BeliqInvoiceRendererTest extends TestCase
             $configProvider,
             new OrderAdapter(),
             new InvoiceMapper(),
+            $this->lookup($existingCount),
             $http,
         );
+    }
+
+    private function lookup(int $count): InvoiceDocumentLookup
+    {
+        $documentRepository = $this->createMock(EntityRepository::class);
+        $documentRepository->method('searchIds')->willReturnCallback(
+            static fn (Criteria $criteria, Context $context): IdSearchResult => new IdSearchResult($count, [], $criteria, $context),
+        );
+
+        return new InvoiceDocumentLookup($documentRepository);
     }
 
     private function operation(string $orderId, string $fileType): \Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation

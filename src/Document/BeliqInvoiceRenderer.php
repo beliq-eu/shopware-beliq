@@ -41,6 +41,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         private readonly PluginConfigProvider $configProvider,
         private readonly OrderAdapter $adapter,
         private readonly InvoiceMapper $mapper,
+        private readonly InvoiceDocumentLookup $documents,
         private readonly HttpClient $http = new CurlHttpClient(),
     ) {
     }
@@ -79,12 +80,18 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
                 $generated = $client->generate($body);
 
+                // The first beliq document for an order takes the order number; a
+                // regenerate from the order's Documents card gets a distinct suffix,
+                // because Shopware rejects a duplicate document number.
+                $existing = $this->documents->countForOrder($operation->getOrderId(), $context);
+                $documentNumber = $existing === 0 ? $source->number : $source->number . '-' . ($existing + 1);
+
                 $isPdf = str_contains($generated['contentType'], 'pdf');
                 $result->addSuccess($orderId, new RenderedDocument(
-                    $source->number,
-                    'invoice-' . $source->number,
+                    $documentNumber,
+                    'invoice-' . $documentNumber,
                     $isPdf ? 'pdf' : 'xml',
-                    ['documentNumber' => $source->number],
+                    ['documentNumber' => $documentNumber],
                     $isPdf ? 'application/pdf' : 'application/xml',
                     $generated['bytes'],
                 ));
