@@ -159,14 +159,8 @@ returns null for `xrechnung` / `peppol-bis`, so the `profile` field is dropped f
 the generate body for those standards (sending `profile=en16931` there is a hard
 `422`). The profile option still applies to the ZUGFeRD / Factur-X family.
 
-Open before Pass 1c is done:
-
-1. Admin action to (re)generate for a single order. Regeneration also wants
-   idempotency: a `beliq_invoice` already exists per order, so a re-triggered paid
-   transition currently logs a "document number already exists" error rather than
-   replacing or skipping.
-
-Store submission is a separate operator step (below).
+Regeneration idempotency is handled in Pass 1e. Store submission is a separate
+operator step (below).
 
 ### Pass 1d: XRechnung BR-DE field mapping (done)
 
@@ -202,8 +196,33 @@ contact, and `beliq-engine` emits it as `cac:Contact` in the UBL output
 engine build is live on the target API. XRechnung (CII) carries the same contact and is
 the other supported German target.
 
-Follow-up once the engine build is in production: add a German `peppol-bis` case to
-`LiveGenerateSmokeTest` alongside the existing non-German one.
+### Pass 1e: regeneration idempotency + German Peppol smoke (done)
+
+The admin can already (re)generate a beliq invoice from an order's Documents card:
+`beliq_invoice` is a registered document type with a global base config, so it appears
+in Shopware's native "create document" dropdown alongside invoice / credit note. No
+custom admin UI is needed. What was missing is idempotency, because the renderer pins
+the document number to the order number and Shopware rejects a duplicate.
+
+`InvoiceDocumentLookup` counts the beliq invoices already on an order, and two callers
+use it:
+
+- **Automatic generation never overwrites.** `OrderStateSubscriber` skips when a
+  beliq invoice already exists, so a re-fired paid / completed transition is a no-op
+  instead of a "document number already exists" error.
+- **Manual regeneration gets a distinct number.** `BeliqInvoiceRenderer` uses the order
+  number for the first document and `{orderNumber}-{n+1}` for a regenerate, so
+  generating again from the Documents card succeeds and each document keeps a unique,
+  order-derived number.
+
+Verified end to end against the running Dockware 6.7 + local api + engine: an order that
+already had `beliq_invoice` 10010 returned `DOCUMENT__NUMBER_ALREADY_EXISTS` before, and
+after the change the same admin create call succeeds with document number `10010-2`.
+
+German Peppol BIS is now covered too. The plugin's real `InvoiceMapper` + `BeliqClient`
+produce a DE-to-DE Peppol BIS invoice that validates green (0 errors, `cac:Contact`
+present) against the local engine carrying `bq-engine#119`. `LiveGenerateSmokeTest` gains
+`testPeppolBisFromAGermanBusinessOrderValidatesGreen` next to the non-German case.
 
 ## Operator-gated (post-go-live)
 
