@@ -11,11 +11,6 @@
             <label lang="de-DE">API-Schluessel</label>
             <helpText>Your beliq API key. The free tier is enough to evaluate the plugin.</helpText>
         </input-field>
-        <input-field type="url">
-            <name>baseUrl</name>
-            <label>API base URL</label>
-            <defaultValue>https://api.beliq.eu</defaultValue>
-        </input-field>
     </card>
 
     <card>

@@ -113,7 +113,7 @@ cannot be exercised without a kernel + DB):
   the adapter -> business gate -> mapper -> beliq client path moved into the
   renderer). Never throws out of the handler (a generation failure must not break
   checkout); failures are logged.
-- `src/Resources/config/config.xml`: API key, base URL, seller legal details,
+- `src/Resources/config/config.xml`: API key, seller legal details,
   target format / profile / output, generation scope (business-only default),
   trigger state, zero-rate category.
 - `src/Resources/config/services.xml`: DI wiring.

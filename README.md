@@ -43,7 +43,7 @@ and intra-community supply are the merchant's call to configure; see
 
 In the plugin settings (Extensions -> beliq e-invoicing -> Configure):
 
-- Enter your beliq API key and, if needed, a custom API base URL.
+- Enter your beliq API key.
 - Fill in the seller legal details (name, VAT ID, address). EN 16931 requires
   them, so the seller block is the merchant's to complete.
 - Pick the document format (ZUGFeRD / Factur-X hybrid PDF by default), profile,
