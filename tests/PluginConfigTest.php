@@ -172,15 +172,29 @@ final class PluginConfigTest extends TestCase
         self::assertSame('extended', $this->configWith('facturx', 'extended', 'pdf')->effectiveProfile());
     }
 
-    public function testExpectedFileTypeFollowsStandardThenOutput(): void
+    public function testEffectiveOutputResolvesPdfToXmlOnTheXmlOnlyStandards(): void
     {
-        // XRechnung and Peppol BIS are always XML, whatever the output setting.
-        self::assertSame('xml', $this->configWith('xrechnung', 'en16931', 'pdf')->expectedFileType());
-        self::assertSame('xml', $this->configWith('peppol-bis', 'en16931', 'pdf')->expectedFileType());
-        // The ZUGFeRD / Factur-X family follows the output setting.
-        self::assertSame('pdf', $this->configWith('zugferd', 'en16931', 'pdf')->expectedFileType());
-        self::assertSame('xml', $this->configWith('zugferd', 'en16931', 'xml')->expectedFileType());
-        self::assertSame('pdf', $this->configWith('facturx', 'en16931', 'pdf')->expectedFileType());
+        // Neither has a hybrid PDF, so the API would answer the pdf setting with a
+        // 400 unless the request asked for a picture of the invoice instead of the
+        // invoice. The stored document has to be the legal one.
+        self::assertSame('xml', $this->configWith('xrechnung', 'en16931', 'pdf')->effectiveOutput());
+        self::assertSame('xml', $this->configWith('peppol-bis', 'en16931', 'pdf')->effectiveOutput());
+        // The ZUGFeRD / Factur-X family follows the output setting as chosen.
+        self::assertSame('pdf', $this->configWith('zugferd', 'en16931', 'pdf')->effectiveOutput());
+        self::assertSame('xml', $this->configWith('zugferd', 'en16931', 'xml')->effectiveOutput());
+        self::assertSame('pdf', $this->configWith('facturx', 'en16931', 'pdf')->effectiveOutput());
+    }
+
+    public function testExpectedFileTypeFollowsTheOutputActuallySent(): void
+    {
+        foreach ([['xrechnung', 'pdf'], ['peppol-bis', 'pdf'], ['zugferd', 'pdf'], ['zugferd', 'xml'], ['facturx', 'pdf']] as [$standard, $output]) {
+            $config = $this->configWith($standard, 'en16931', $output);
+            self::assertSame(
+                $config->effectiveOutput(),
+                $config->expectedFileType(),
+                "the stored file type must follow the output sent for {$standard}/{$output}",
+            );
+        }
     }
 
     private function configWith(string $standard, string $profile, string $output): PluginConfig
