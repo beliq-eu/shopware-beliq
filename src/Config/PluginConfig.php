@@ -21,6 +21,19 @@ final readonly class PluginConfig
      */
     private const PROFILE_FIXED_STANDARDS = ['xrechnung', 'peppol-bis'];
 
+    /**
+     * Standards with no hybrid PDF. The API refuses PDF output for these unless
+     * the request names a visual to render, and that visual carries no embedded
+     * XML: it is a rendering of the invoice, not the invoice. The document this
+     * plugin stores against an order has to be the legal one, so PDF output is
+     * resolved back to XML for them rather than requesting a picture of it.
+     *
+     * Same two members as PROFILE_FIXED_STANDARDS today, for a different reason:
+     * one is about which profile the standard pins, this one is about whether a
+     * hybrid PDF exists at all.
+     */
+    private const XML_ONLY_STANDARDS = ['xrechnung', 'peppol-bis'];
+
     public function __construct(
         public bool $enabled,
         public string $apiKey,
@@ -59,16 +72,26 @@ final readonly class PluginConfig
     }
 
     /**
-     * The file extension the generated document will carry. XRechnung and Peppol
-     * BIS are always XML; the ZUGFeRD / Factur-X family follows the output setting
-     * (hybrid PDF or XML).
+     * The `output` to send for the configured standard. XRechnung and Peppol BIS
+     * have no hybrid PDF, so the Output setting ("PDF (hybrid, where the format
+     * supports it)") resolves to XML for them; the ZUGFeRD / Factur-X family
+     * follows the setting as chosen.
      */
-    public function expectedFileType(): string
+    public function effectiveOutput(): string
     {
-        if (in_array($this->standard, self::PROFILE_FIXED_STANDARDS, true)) {
+        if (in_array($this->standard, self::XML_ONLY_STANDARDS, true)) {
             return 'xml';
         }
 
         return $this->output === 'xml' ? 'xml' : 'pdf';
+    }
+
+    /**
+     * The file extension the generated document will carry. Follows the output
+     * actually sent, so the stored file and the request can never disagree.
+     */
+    public function expectedFileType(): string
+    {
+        return $this->effectiveOutput();
     }
 }

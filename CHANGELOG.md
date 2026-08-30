@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The Output setting resolves to XML on XRechnung and Peppol BIS. Neither has a
+  hybrid PDF, so the API answered `output=pdf` for them with a 400 on every
+  order. The setting's own label ("PDF (hybrid, where the format supports it)")
+  already said this is what it means.
 - Framework-agnostic core: the order-to-EN 16931 mapper (VAT category derivation,
   tax breakdown, rounding, totals) and the beliq API client, with tests.
 - Shopware runtime wiring: an `OrderEntity` -> `SourceOrder` adapter (net
