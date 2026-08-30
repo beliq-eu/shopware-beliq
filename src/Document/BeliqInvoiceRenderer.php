@@ -73,7 +73,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 $body = $this->mapper->toGenerateBody(
                     $source,
                     $config->standard,
-                    $config->output,
+                    $config->effectiveOutput(),
                     $config->effectiveProfile(),
                 );
 

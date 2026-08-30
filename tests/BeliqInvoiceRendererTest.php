@@ -118,6 +118,38 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertArrayNotHasKey('profile', $sent, 'profile must be omitted for xrechnung');
     }
 
+    public function testXrechnungWithThePdfSettingStillRequestsXml(): void
+    {
+        // The Output setting defaults to PDF and XRechnung has no hybrid PDF, so
+        // this pairing is the plugin's most likely misconfiguration. Sending it as
+        // asked is a 400 on every order; the setting's own label ("PDF (hybrid,
+        // where the format supports it)") says XML is what it means here.
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10046');
+
+        $result = $this->renderer($order, $this->config('xrechnung', 'pdf'), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        $sent = json_decode($http->lastCall()['body'], true);
+        self::assertSame('xrechnung', $sent['standard']);
+        self::assertSame('xml', $sent['output'], 'xrechnung has no hybrid PDF, so pdf must resolve to xml');
+
+        $doc = $result->getOrderSuccess($order->getId());
+        self::assertNotNull($doc);
+        self::assertSame('xml', $doc->getFileExtension());
+    }
+
+    public function testZugferdWithThePdfSettingStillRequestsPdf(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '%PDF-1.3 fake', 'headers' => ['content-type' => 'application/pdf']]);
+        $order = $this->businessOrder('SW10047');
+
+        $this->renderer($order, $this->config('zugferd', 'pdf'), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'pdf')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('pdf', json_decode($http->lastCall()['body'], true)['output']);
+    }
+
     public function testPrivateOrderUnderBusinessOnlyIsSkippedWithoutCallingTheApi(): void
     {
         $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
