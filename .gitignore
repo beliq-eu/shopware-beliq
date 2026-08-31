@@ -2,3 +2,8 @@
 composer.lock
 .phpunit.result.cache
 .phpunit.cache/
+
+# Local secrets
+.env
+.env.*
+!.env.example
