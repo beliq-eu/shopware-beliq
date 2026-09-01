@@ -5,8 +5,18 @@ namespace Beliq\Shopware\Service;
 /** A cURL-backed HttpClient with no framework dependency. */
 final class CurlHttpClient implements HttpClient
 {
-    public function __construct(private readonly int $timeoutSeconds = 30)
-    {
+    /**
+     * $connectTimeoutSeconds bounds the TCP connect alone. It matters because
+     * BeliqInvoiceRenderer::render() calls this once per order in a bulk run:
+     * against a black-holed host (a mistyped base URL, a DNS-resolvable host
+     * that drops SYNs) each order otherwise burns the full $timeoutSeconds, so
+     * a 50-order render sits for 25 minutes instead of 8. libcurl's own default
+     * is 300s, capped here only by the total timeout.
+     */
+    public function __construct(
+        private readonly int $timeoutSeconds = 30,
+        private readonly int $connectTimeoutSeconds = 10,
+    ) {
     }
 
     public function request(string $method, string $url, array $headers = [], ?string $body = null): array
@@ -27,6 +37,7 @@ final class CurlHttpClient implements HttpClient
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => $headerLines,
             CURLOPT_TIMEOUT => $this->timeoutSeconds,
+            CURLOPT_CONNECTTIMEOUT => $this->connectTimeoutSeconds,
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HEADERFUNCTION => static function ($_handle, string $line) use (&$responseHeaders): int {
                 $parts = explode(':', $line, 2);
