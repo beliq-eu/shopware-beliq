@@ -1,6 +1,7 @@
 {
   "name": "beliq/shopware-beliq",
   "description": "Generate compliant EN 16931 e-invoices from Shopware orders through the beliq API.",
+  "version": "0.1.0",
   "type": "shopware-platform-plugin",
   "license": "MIT",
   "authors": [
@@ -39,14 +40,16 @@
       "de-DE": "beliq E-Rechnung"
     },
     "description": {
-      "en-GB": "Turn Shopware orders into compliant EN 16931 e-invoices (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) through the beliq API.",
-      "de-DE": "Shopware-Bestellungen in konforme EN-16931-E-Rechnungen (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) ueber die beliq-API umwandeln."
+      "en-GB": "Turn Shopware orders into compliant EN 16931 e-invoices (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) through the beliq API. Validated on generation; sending and filing stay with you.",
+      "de-DE": "Shopware-Bestellungen in konforme EN-16931-E-Rechnungen (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) ueber die beliq-API umwandeln. Geprueft; Versand und Meldung bleiben bei Ihnen."
     },
     "manufacturerLink": {
-      "en-GB": "https://beliq.eu"
+      "en-GB": "https://beliq.eu/",
+      "de-DE": "https://beliq.eu/de/"
     },
     "supportLink": {
-      "en-GB": "https://beliq.eu"
+      "en-GB": "https://beliq.eu/",
+      "de-DE": "https://beliq.eu/de/"
     }
   },
   "scripts": {
