@@ -1,0 +1,29 @@
+# The Store gate runs unpinned, so its rules can change without a commit here.
+# A push trigger answers "is this commit ok", never "is today ok", and this
+# plugin is dormant until beliq go-live: without a schedule, a new shopware-cli
+# rule would first surface at upload time, months from now.
+#
+# This runs the same command ci.yml runs, so the two cannot drift. A failure
+# means the Store's rules moved, not that the code broke. GitHub notifies the
+# account that last touched the cron when a scheduled run fails, which is the
+# only thing watching this.
+#
+# Delivery slips: GitHub drops and delays scheduled fires, daily crons by 11 to
+# 13 hours in measured cases. Weekly is sized for that, not for punctuality.
+name: Store currency
+
+on:
+  schedule:
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  currency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
+        with:
+          version: latest
+      - name: Shopware Store validation
+        run: shopware-cli extension validate . --store-compliance
