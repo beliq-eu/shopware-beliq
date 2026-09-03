@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
 
 - The Output setting resolves to XML on XRechnung and Peppol BIS. Neither has a
   hybrid PDF, so the API answered `output=pdf` for them with a 400 on every

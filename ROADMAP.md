@@ -224,6 +224,37 @@ produce a DE-to-DE Peppol BIS invoice that validates green (0 errors, `cac:Conta
 present) against the local engine carrying `bq-engine#119`. `LiveGenerateSmokeTest` gains
 `testPeppolBisFromAGermanBusinessOrderValidatesGreen` next to the non-German case.
 
+### Pass 1f: Shopware Store validation metadata (done)
+
+`shopware-cli extension validate` is the tool the producer upload path runs, and it
+reported eight errors, every one of them metadata:
+
+| Error | Fix |
+|---|---|
+| `metadata.version` (twice: missing key, empty version string) | `"version": "0.1.0"` in `composer.json`. The ZIP carries no version anywhere else. |
+| `metadata.description` en-GB 121 chars, de-DE 129 | each locale extended into the required 150 to 185 window |
+| `metadata.manufacturer` / `metadata.support` | `de-DE` entries added; both locales now point at the locale's own page (`/` and `/de/`) |
+| `metadata.icon` (twice) | `src/Resources/config/plugin.png` added |
+
+The icon is the three-ring mark from `beliq-landing/public/beliq-logo-3ring-only.svg`
+on `favicon.svg`'s white rounded tile, rendered at 256 px. The enforced window is 112
+to 256 px and under 30 KB: a straight RGBA render is 32 KB and fails, so it ships as a
+64-entry palette at 4.7 KB, which two colours plus antialiasing survive intact.
+
+Every rule was falsified against the tool before being trusted: a 96 px icon, a 512 px
+icon, a 230 KB icon and a 123-char description each produce their error. **The one rule
+that does not exist is the changelog.** Deleting `CHANGELOG.md` outright leaves the run
+clean on 0.18.3, as does a heading naming a different version, so the versioned-heading
+requirement is a Store backend rule rather than a CLI one. The heading still moves from
+`Unreleased` to `0.1.0`, because that is what the Store release notes read.
+
+`extension package` builds `BeliqShopware-<ref>.zip` (42 KB, 29 entries, tests and
+`vendor/` excluded, `plugin.png` present), and the extracted artifact validates with 0
+errors.
+
+Left as a warning, not an error: `config.services_xml.deprecated` asks for
+`services.yaml`. `shopware-cli extension fix` converts it.
+
 ## Operator-gated (post-go-live)
 
 - Shopware Store (Community Store) producer account + manual review submission,
