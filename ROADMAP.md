@@ -38,6 +38,18 @@ is a separate track, deferred until the PHP pair proves the mapping.
    (vendoring / prefixing), so that extraction is a decision at the port, not now.
 5. **Standard-rated (`S`) is the correct, tested path in Pass 1.** See the known
    limitation below on non-standard VAT categories.
+6. **The version stays `0.1.0` until the publish pass, which is where `1.0.0`
+   gets decided.** Every published beliq connector is 0.x (n8n 0.2.0,
+   activepieces 0.2.1, directus 0.2.3, beliq-mcp 0.3.1, beliq-cli 0.2.1,
+   beliq-sevdesk 0.2.1, `@beliq/sdk` 0.3.1, `beliq` on PyPI 0.2.1), and beliq
+   itself has not gone live, so a 1.x plugin would be the only 1.x thing in the
+   portfolio and would claim more than the product does. Nothing is pinned to
+   the number yet: no git tag, no Packagist listing, no Store listing. The
+   publish pass already reopens the version metadata (the changelog date, the
+   live-key smoke, `Tested up to`), so promoting to `1.0.0` there costs the same
+   as it does now and can be decided against a live API. Do **not** ship a Store
+   ZIP whose `--overwrite-version` differs from `composer.json`: the listing and
+   the changelog heading would disagree.
 
 ## Known limitation: VAT exemption reasons
 
@@ -254,6 +266,33 @@ errors.
 
 Left as a warning, not an error: `config.services_xml.deprecated` asks for
 `services.yaml`. `shopware-cli extension fix` converts it.
+
+### Pass 1g: the Store gate runs in CI (done)
+
+Pass 1f cleared `shopware-cli extension validate` and nothing kept it clear.
+`ci.yml` gains a `store-validate` job, and `store-currency.yml` runs the same
+command weekly.
+
+`extension validate` **exits 1 on an error and 0 on a warning**, so the step is
+the verdict and needs no output parsing. Worth stating because the obvious local
+reading is wrong: piping it through `tail` returns `tail`'s status, which is how
+an earlier run of this same command read as `exit=0` while printing
+`ERROR found errors`. Falsified both ways against a real tree: clean exits 0 with
+the `services.xml` warning still present, and deleting `plugin.png` exits 1.
+
+**The CLI is deliberately unpinned** (`version: latest`). A pinned copy of the
+rules can pass here and still be rejected on upload, which is the worse failure:
+a false green. A new rule reddening the job is the gate reporting that the
+Store's rules moved.
+
+That makes the job's input include "what shopware AG released", which is not this
+commit, so a push trigger alone is not enough. The plugin is dormant until beliq
+go-live, so without a schedule a new rule would first surface at upload time,
+months from now. `store-currency.yml` runs the same command weekly, and runs the
+command itself rather than a second copy of the rule so the two cannot drift.
+Scheduled fires slip (GitHub delays daily crons by 11 to 13 hours in measured
+cases); weekly is sized for that. A failed scheduled run notifies the account
+that last touched the cron, which is the only thing watching it.
 
 ## Operator-gated (post-go-live)
 
