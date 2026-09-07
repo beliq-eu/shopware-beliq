@@ -1,6 +1,6 @@
 # shopware-beliq roadmap
 
-`status: live, next: the Shopware Store producer account and submission; its live-API precondition is met and the timing against the public launch is the operator's call`
+`status: live, next: the Shopware Store producer account and submission; its live-API precondition is proven and the timing against the public launch is the operator's call`
 
 A Shopware 6 plugin that turns store orders into compliant EN 16931 e-invoices
 (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) through the beliq API. beliq produces
@@ -304,12 +304,17 @@ that last touched the cron, which is the only thing watching it.
 ## Operator-gated (post-go-live)
 
 - Shopware Store (Community Store) producer account + manual review submission,
-  and/or Packagist listing. Documented here; not part of the code build. The live
-  beliq API this needs for review screenshots and a test store is up:
-  `api.beliq.eu` answers and `dashboard.beliq.eu` serves, so what remains is the
-  producer account, a key, and the decision to submit ahead of the public launch
-  announcement.
-- Live-key smoke, which needs only a `BELIQ_API_KEY` against that API.
+  and/or Packagist listing. Documented here; not part of the code build. **The
+  live API and a card-free evaluation key are proven against production as of
+  2026-09-07:** signup needs no card, a new org lands on Free (20 documents a
+  month at 10 requests a minute), and a free-tier live key generated an XRechnung
+  3.0 document that re-validated with 0 errors. The walkthrough and evidence are
+  in `../woocommerce-beliq/PASS-3-SMOKE-ROADMAP.md` step 1, which covers the
+  shared beliq-side precondition rather than anything WooCommerce-specific. What
+  remains is the producer account, a test store, and the decision to submit ahead
+  of the public launch announcement.
+- Live-key smoke: the beliq half is done (see above). What is still unrun for this
+  plugin is the smoke against production rather than a local api + engine.
 
 ## Conventions
 
