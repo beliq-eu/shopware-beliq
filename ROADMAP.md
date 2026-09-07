@@ -1,5 +1,7 @@
 # shopware-beliq roadmap
 
+`status: live, next: the Shopware Store producer account and submission; its live-API precondition is met and the timing against the public launch is the operator's call`
+
 A Shopware 6 plugin that turns store orders into compliant EN 16931 e-invoices
 (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) through the beliq API. beliq produces
 and checks the document; transmission, archiving, and tax-authority reporting
@@ -31,18 +33,23 @@ is a separate track, deferred until the PHP pair proves the mapping.
 3. **The plugin generates and stores; it does not transmit.** Output is a
    compliant document attached to the order (Shopware document / media). Peppol
    transmission, email delivery, and filing stay with the merchant.
-4. **Self-contained beliq client for now.** There is no PHP beliq SDK. Pass 1
-   ships a small internal HTTP client. When the WooCommerce port lands (the
-   second PHP consumer), decide whether to extract a shared `beliq-php` Composer
-   package. WordPress.org distribution complicates shared Composer deps
-   (vendoring / prefixing), so that extraction is a decision at the port, not now.
+4. **Self-contained beliq client, and no shared PHP package.** There is no PHP
+   beliq SDK, so the plugin ships a small internal HTTP client. The WooCommerce
+   port, the second PHP consumer, took a copy of the core under a neutral
+   `Beliq\Core\` namespace instead of a shared `beliq/beliq-php` Composer
+   package: WordPress.org distribution complicates shared Composer deps
+   (vendoring / prefixing), and a self-contained zip avoids both. The extraction
+   waits on a third PHP consumer or real drift, and the neutral namespace keeps
+   it a mechanical move. Any change to the core here must be mirrored to
+   `woocommerce-beliq`.
 5. **Standard-rated (`S`) is the correct, tested path in Pass 1.** See the known
    limitation below on non-standard VAT categories.
 6. **The version stays `0.1.0` until the publish pass, which is where `1.0.0`
    gets decided.** Every published beliq connector is 0.x (n8n 0.2.0,
-   activepieces 0.2.1, directus 0.2.3, beliq-mcp 0.3.1, beliq-cli 0.2.1,
-   beliq-sevdesk 0.2.1, `@beliq/sdk` 0.3.1, `beliq` on PyPI 0.2.1), and beliq
-   itself has not gone live, so a 1.x plugin would be the only 1.x thing in the
+   activepieces 0.2.2, directus 0.2.3, beliq-mcp 0.3.1, beliq-cli 0.2.1,
+   beliq-sevdesk 0.2.2, `@beliq/sdk` 0.3.1, `beliq` on PyPI 0.2.1), and beliq
+   has not made its public launch announcement, so a 1.x plugin would be the
+   only 1.x thing in the
    portfolio and would claim more than the product does. Nothing is pinned to
    the number yet: no git tag, no Packagist listing, no Store listing. The
    publish pass already reopens the version metadata (the changelog date, the
@@ -75,7 +82,7 @@ a per-category exemption reason through `PluginConfig` and the mapper is a follo
 
 ## Passes
 
-### Pass 1a: framework-agnostic core (this pass)
+### Pass 1a: framework-agnostic core (done)
 
 - `src/Invoice/*` value objects: the normalized order the mapper consumes
   (parties, address, lines, payment means).
@@ -130,7 +137,7 @@ cannot be exercised without a kernel + DB):
   trigger state, zero-rate category.
 - `src/Resources/config/services.xml`: DI wiring.
 
-### Pass 1c: runtime smoke + first-class order document (needs a local Shopware)
+### Pass 1c: runtime smoke + first-class order document (done)
 
 Smoke run against a local Dockware Shopware 6.7 (PHP 8.3) with the plugin installed
 and activated, pointed at a local beliq API + engine. A real B2B order (company +
@@ -297,9 +304,12 @@ that last touched the cron, which is the only thing watching it.
 ## Operator-gated (post-go-live)
 
 - Shopware Store (Community Store) producer account + manual review submission,
-  and/or Packagist listing. Needs a live beliq API for review screenshots and a
-  test store. Documented here; not part of the code build.
-- Live-key smoke once a `BELIQ_API_KEY` and live/staging API exist.
+  and/or Packagist listing. Documented here; not part of the code build. The live
+  beliq API this needs for review screenshots and a test store is up:
+  `api.beliq.eu` answers and `dashboard.beliq.eu` serves, so what remains is the
+  producer account, a key, and the decision to submit ahead of the public launch
+  announcement.
+- Live-key smoke, which needs only a `BELIQ_API_KEY` against that API.
 
 ## Conventions
 
