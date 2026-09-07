@@ -314,7 +314,15 @@ that last touched the cron, which is the only thing watching it.
   remains is the producer account, a test store, and the decision to submit ahead
   of the public launch announcement.
 - Live-key smoke: the beliq half is done (see above). What is still unrun for this
-  plugin is the smoke against production rather than a local api + engine.
+  plugin is the smoke against production rather than a local api + engine, and
+  that gap is no longer theoretical. Pointing WooCommerce's harness at production
+  caught a defect in the copied core that every local run had passed over: the
+  client asked `/v1/generate` for JSON, so the generated document arrived as the
+  API's base64 envelope rather than as the document. Fixed here under decision 4,
+  with a regression test, but **only WooCommerce has actually watched this plugin
+  family talk to production.** Run the Dockware smoke against `api.beliq.eu`
+  before the Store submission; see `../woocommerce-beliq/PASS-3-SMOKE-ROADMAP.md`
+  3.6 for what that run is worth.
 
 ## Conventions
 
