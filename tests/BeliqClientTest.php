@@ -9,6 +9,48 @@ use PHPUnit\Framework\TestCase;
 
 final class BeliqClientTest extends TestCase
 {
+    /**
+     * /v1/generate returns the raw file by default but switches to a JSON
+     * envelope carrying the file base64-encoded as soon as the caller ranks
+     * application/json above the document's own media type. The other endpoints
+     * do want JSON, so the header cannot be shared: asking for JSON here made
+     * every stored document the envelope instead of the document.
+     */
+    public function testGenerateAsksForTheDocumentAndNeverTheJsonEnvelope(): void
+    {
+        foreach ([['xml', 'application/xml'], ['pdf', 'application/pdf']] as [$output, $expected]) {
+            $http = new FakeHttpClient([
+                'status' => 200,
+                'body' => 'bytes',
+                'headers' => ['content-type' => $expected],
+            ]);
+            $client = new BeliqClient('key-123', 'https://api.beliq.eu', $http);
+
+            $client->generate(['standard' => 'zugferd', 'output' => $output, 'invoice' => []]);
+
+            $accept = $http->lastCall()['headers']['Accept'] ?? '';
+            self::assertSame($expected, $accept, "output=$output must Accept the document");
+            self::assertStringNotContainsString('application/json', $accept, "output=$output must not opt into the JSON envelope");
+        }
+    }
+
+    /** The JSON-returning endpoints still ask for JSON. */
+    public function testJsonEndpointsStillAcceptJson(): void
+    {
+        $http = new FakeHttpClient([
+            'status' => 200,
+            'body' => '{"success":true,"data":{"valid":true}}',
+            'headers' => ['content-type' => 'application/json'],
+        ]);
+        $client = new BeliqClient('key-123', 'https://api.beliq.eu', $http);
+
+        $client->validate('<Invoice/>');
+        self::assertSame('application/json', $http->lastCall()['headers']['Accept']);
+
+        $client->me();
+        self::assertSame('application/json', $http->lastCall()['headers']['Accept']);
+    }
+
     public function testGenerateBuildsRequestAndReturnsDocument(): void
     {
         $http = new FakeHttpClient([
