@@ -13,6 +13,11 @@ use Beliq\Shopware\Invoice\SourceOrder;
  * VAT is computed per category group (BR-CO-17): the category tax amount is the
  * category taxable amount times the rate, rounded once. Grand totals are derived
  * from those group sums so net + tax = gross holds exactly (BR-CO-15).
+ *
+ * Each line net is rounded once, and every sum is taken over the rounded values:
+ * the invoice's line total (BT-106) and each group's taxable amount (BT-116) must
+ * equal the sum of the line nets as emitted (BR-CO-10, BR-S-08), which rounding an
+ * unrounded sum does not guarantee.
  */
 final class InvoiceMapper
 {
@@ -39,7 +44,7 @@ final class InvoiceMapper
                 'quantity' => $line->quantity,
                 'unitCode' => $line->unitCode,
                 'unitPrice' => $this->round2($line->unitNetPrice),
-                'lineTotal' => $this->round2($line->lineNetTotal),
+                'lineTotal' => $this->lineNet($line),
                 'vatRate' => $line->vatRate,
                 'vatCategoryCode' => $category,
                 ...($line->itemId !== null ? ['itemId' => $line->itemId] : []),
@@ -132,7 +137,7 @@ final class InvoiceMapper
                     'taxableAmount' => 0.0,
                 ];
             }
-            $groups[$key]['taxableAmount'] += $line->lineNetTotal;
+            $groups[$key]['taxableAmount'] += $this->lineNet($line);
         }
 
         uasort($groups, static function (array $a, array $b): int {
@@ -151,6 +156,11 @@ final class InvoiceMapper
         }
 
         return $summary;
+    }
+
+    private function lineNet(SourceLine $line): float
+    {
+        return $this->round2($line->lineNetTotal);
     }
 
     private function round2(float $value): float

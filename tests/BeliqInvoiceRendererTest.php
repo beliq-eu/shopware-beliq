@@ -301,6 +301,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         $order->setLineItems(new OrderLineItemCollection([$item]));
         $order->setOrderCustomer($customer);
         $order->setBillingAddress($billing);
+        $order->setShippingCosts(new CalculatedPrice(0.0, 0.0, new CalculatedTaxCollection(), new TaxRuleCollection()));
 
         return $order;
     }

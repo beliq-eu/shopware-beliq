@@ -6,6 +6,7 @@ use Beliq\Shopware\Config\PluginConfig;
 use Beliq\Shopware\Invoice\Address;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\PaymentMeans;
+use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
@@ -104,6 +105,101 @@ final class OrderAdapterTest extends TestCase
         self::assertEqualsWithDelta(300.0, $source->lines[0]->lineNetTotal, 0.001);
         self::assertEqualsWithDelta(100.0, $source->lines[0]->unitNetPrice, 0.001);
         self::assertEqualsWithDelta(0.0, $source->lines[0]->vatRate, 0.001);
+    }
+
+    /**
+     * Shipping lives on the order, not among its line items. Before it was read,
+     * the invoice left it out and understated what the customer paid.
+     */
+    public function testShippingOnAGrossOrderBecomesANetLine(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_GROSS,
+            // 4.95 gross at 19% => tax 0.79, net 4.16.
+            $this->shipping(4.95, [[0.79, 19.0, 4.95]]),
+        );
+
+        $source = $this->adapter->toSourceOrder($order, $this->config());
+
+        self::assertCount(2, $source->lines);
+        $shipping = $source->lines[1];
+        self::assertSame('Shipping', $shipping->description);
+        self::assertEqualsWithDelta(1.0, $shipping->quantity, 0.001);
+        self::assertEqualsWithDelta(4.16, $shipping->lineNetTotal, 0.001);
+        self::assertEqualsWithDelta(19.0, $shipping->vatRate, 0.001);
+    }
+
+    /**
+     * A shipping method on tax type `auto` spreads its tax across the cart's
+     * rates. One line at a single rate would put part of it in the wrong group.
+     */
+    public function testProportionallyTaxedShippingSplitsIntoOneLinePerRate(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_GROSS,
+            // 10.00 gross split 60/40: 6.00 at 19% (tax 0.96), 4.00 at 7% (tax 0.26).
+            $this->shipping(10.0, [[0.96, 19.0, 6.0], [0.26, 7.0, 4.0]]),
+        );
+
+        $shipping = array_slice($this->adapter->toSourceOrder($order, $this->config())->lines, 1);
+
+        self::assertCount(2, $shipping);
+        self::assertEqualsWithDelta(5.04, $shipping[0]->lineNetTotal, 0.001);
+        self::assertEqualsWithDelta(19.0, $shipping[0]->vatRate, 0.001);
+        self::assertEqualsWithDelta(3.74, $shipping[1]->lineNetTotal, 0.001);
+        self::assertEqualsWithDelta(7.0, $shipping[1]->vatRate, 0.001);
+    }
+
+    public function testShippingOnANetOrderPassesThrough(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_NET,
+            $this->shipping(5.0, [[0.95, 19.0, 5.0]]),
+        );
+
+        $shipping = $this->adapter->toSourceOrder($order, $this->config())->lines[1];
+
+        self::assertEqualsWithDelta(5.0, $shipping->lineNetTotal, 0.001);
+        self::assertEqualsWithDelta(19.0, $shipping->vatRate, 0.001);
+    }
+
+    public function testShippingOnATaxFreeOrderIsZeroRated(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_FREE,
+            $this->shipping(5.0, []),
+        );
+
+        $shipping = $this->adapter->toSourceOrder($order, $this->config())->lines[1];
+
+        self::assertEqualsWithDelta(5.0, $shipping->lineNetTotal, 0.001);
+        self::assertEqualsWithDelta(0.0, $shipping->vatRate, 0.001);
+    }
+
+    public function testFreeShippingAddsNoLine(): void
+    {
+        $order = $this->businessOrder(CartPrice::TAX_STATE_GROSS, $this->shipping(0.0, []));
+
+        self::assertCount(1, $this->adapter->toSourceOrder($order, $this->config())->lines);
+    }
+
+    /**
+     * The claim the fix exists for: the invoice's gross total is what the
+     * customer paid, products plus shipping.
+     */
+    public function testInvoiceGrossTotalIncludesShipping(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_GROSS,
+            $this->shipping(4.95, [[0.79, 19.0, 4.95]]),
+        );
+
+        $source = $this->adapter->toSourceOrder($order, $this->config());
+        $invoice = (new InvoiceMapper())->toGenerateBody($source, 'xrechnung')['invoice'];
+
+        // 238.00 for the widget plus 4.95 shipping.
+        self::assertEqualsWithDelta(242.95, $invoice['totalGrossAmount'], 0.001);
+        self::assertEqualsWithDelta(204.16, $invoice['totalNetAmount'], 0.001);
     }
 
     public function testPrivateConsumerIsNotFlaggedBusiness(): void
@@ -402,6 +498,37 @@ final class OrderAdapterTest extends TestCase
     /**
      * @param list<OrderLineItemEntity> $lines
      */
+    private function businessOrder(string $taxStatus, CalculatedPrice $shipping): OrderEntity
+    {
+        // Two widgets at 100 net / 119 gross each, in the order's own tax status.
+        $widget = match ($taxStatus) {
+            CartPrice::TAX_STATE_GROSS => $this->line('Widget', 2, 238.0, [[38.0, 19.0, 238.0]], 'SW-1'),
+            CartPrice::TAX_STATE_NET => $this->line('Widget', 2, 200.0, [[38.0, 19.0, 200.0]], 'SW-1'),
+            default => $this->line('Widget', 2, 200.0, [], 'SW-1'),
+        };
+
+        return $this->order(
+            taxStatus: $taxStatus,
+            lines: [$widget],
+            customer: $this->customer('buyer@acme.test', 'Ada', 'Byte', 'ACME GmbH', ['DE123456789'], CustomerEntity::ACCOUNT_TYPE_BUSINESS),
+            billing: $this->address('Hauptstrasse 1', '10115', 'Berlin', 'DE', 'ACME GmbH'),
+            shipping: $shipping,
+        );
+    }
+
+    /**
+     * @param list<array{0: float, 1: float, 2: float}> $taxes tax, rate, price per component
+     */
+    private function shipping(float $total, array $taxes): CalculatedPrice
+    {
+        $collection = new CalculatedTaxCollection();
+        foreach ($taxes as $tax) {
+            $collection->add(new CalculatedTax($tax[0], $tax[1], $tax[2]));
+        }
+
+        return new CalculatedPrice($total, $total, $collection, new TaxRuleCollection());
+    }
+
     private function order(
         string $taxStatus,
         OrderCustomerEntity $customer,
@@ -410,6 +537,7 @@ final class OrderAdapterTest extends TestCase
         ?OrderLineItemCollection $lineItems = null,
         string $currency = 'EUR',
         ?array $customFields = null,
+        ?CalculatedPrice $shipping = null,
     ): OrderEntity {
         $currencyEntity = new CurrencyEntity();
         $currencyEntity->setUniqueIdentifier(Uuid::randomHex());
@@ -426,6 +554,7 @@ final class OrderAdapterTest extends TestCase
         $order->setLineItems($lineItems ?? new OrderLineItemCollection($lines));
         $order->setOrderCustomer($customer);
         $order->setBillingAddress($billing);
+        $order->setShippingCosts($shipping ?? $this->shipping(0.0, []));
         if ($customFields !== null) {
             $order->setCustomFields($customFields);
         }

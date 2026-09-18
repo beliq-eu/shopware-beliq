@@ -2,6 +2,21 @@
 
 ## 0.1.0
 
+- Requires Shopware 6.7 (`shopware/core` `~6.7.0`). The plugin declared `^6.6`
+  but was only ever tested on 6.7, and every 6.6 release fails on the first
+  document render: 6.7 dropped the leading `$html` parameter of
+  `RenderedDocument`, so the arguments land one slot off on 6.6 and the config
+  array meets a string parameter.
+- Shipping is invoiced. Shopware keeps it on the order rather than among the
+  line items, so the invoice left it out and its totals understated what the
+  customer paid while still validating. It is now its own line, one per VAT rate
+  when the shipping method spreads its tax across the cart's rates; free shipping
+  adds nothing.
+- Totals sum the line nets as emitted. Each line net is rounded once and every
+  sum is taken over the rounded values, so the invoice's line total (BT-106) and
+  each VAT group's taxable amount equal the sum of the lines (BR-CO-10, BR-S-08).
+  Rounding the unrounded sum instead could land a cent away whenever a line net
+  carried more than two decimals.
 - The Output setting resolves to XML on XRechnung and Peppol BIS. Neither has a
   hybrid PDF, so the API answered `output=pdf` for them with a 400 on every
   order. The setting's own label ("PDF (hybrid, where the format supports it)")

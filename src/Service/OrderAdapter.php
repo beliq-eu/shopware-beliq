@@ -21,6 +21,9 @@ use Shopware\Core\Checkout\Order\OrderEntity;
  * Shopware-specific half of the plugin; everything downstream (the mapper, the
  * client) is platform-agnostic.
  *
+ * Shopware keeps shipping on the order rather than among its line items, so it is
+ * added as its own line; without it the invoice understates what the customer paid.
+ *
  * Line figures are converted to the net basis EN 16931 works in: Shopware reports
  * order figures in the order's tax status (gross, net, or tax-free), so a gross
  * order has its per-line tax subtracted back out. The seller comes from plugin
@@ -34,6 +37,8 @@ final class OrderAdapter
      */
     private const BUYER_REFERENCE_FIELD = 'beliq_buyer_reference';
 
+    private const SHIPPING_DESCRIPTION = 'Shipping';
+
     public function toSourceOrder(OrderEntity $order, PluginConfig $config): SourceOrder
     {
         $taxStatus = $order->getTaxStatus() ?? $order->getPrice()->getTaxStatus();
@@ -46,6 +51,9 @@ final class OrderAdapter
                 continue;
             }
             $lines[] = $this->toSourceLine($item, $taxStatus);
+        }
+        foreach ($this->shippingLines($order->getShippingCosts(), $taxStatus) as $line) {
+            $lines[] = $line;
         }
 
         $customer = $order->getOrderCustomer();
@@ -135,6 +143,50 @@ final class OrderAdapter
             lineNetTotal: $net,
             vatRate: $rate,
             itemId: $this->itemId($item),
+        );
+    }
+
+    /**
+     * One line per tax component of the order's shipping costs. A shipping method
+     * on tax type `auto` spreads its tax across the cart's rates, one component per
+     * rate, so labelling the whole charge with a single rate would file part of it
+     * in the wrong VAT group. Free shipping adds nothing.
+     *
+     * @return list<SourceLine>
+     */
+    private function shippingLines(CalculatedPrice $shipping, string $taxStatus): array
+    {
+        $total = $shipping->getTotalPrice();
+        if ($total === 0.0) {
+            return [];
+        }
+
+        $taxes = $shipping->getCalculatedTaxes();
+        if ($taxStatus === CartPrice::TAX_STATE_FREE || $taxes->count() === 0) {
+            return [$this->shippingLine($total, 0.0)];
+        }
+
+        $lines = [];
+        foreach ($taxes->getElements() as $tax) {
+            // A component's price is the portion its tax was computed on: gross on
+            // a gross order, net on a net one.
+            $net = $taxStatus === CartPrice::TAX_STATE_GROSS
+                ? $tax->getPrice() - $tax->getTax()
+                : $tax->getPrice();
+            $lines[] = $this->shippingLine($net, $tax->getTaxRate());
+        }
+
+        return $lines;
+    }
+
+    private function shippingLine(float $net, float $rate): SourceLine
+    {
+        return new SourceLine(
+            description: self::SHIPPING_DESCRIPTION,
+            quantity: 1.0,
+            unitNetPrice: $net,
+            lineNetTotal: $net,
+            vatRate: $rate,
         );
     }
 
