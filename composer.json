@@ -54,6 +54,6 @@
   },
   "scripts": {
     "test": "phpunit",
-    "scrub:check": "! grep -rnP '\\x{2014}' src tests README.md ROADMAP.md"
+    "scrub:check": "bash scripts/scrub-check.sh"
   }
 }
