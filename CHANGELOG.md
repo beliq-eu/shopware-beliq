@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Totals sum the line nets as emitted. Each line net is rounded once and every
+  sum is taken over the rounded values, so the invoice's line total (BT-106) and
+  each VAT group's taxable amount equal the sum of the lines (BR-CO-10, BR-S-08).
+  Rounding the unrounded sum instead could land a cent away whenever a line net
+  carried more than two decimals.
 - The Output setting resolves to XML on XRechnung and Peppol BIS. Neither has a
   hybrid PDF, so the API answered `output=pdf` for them with a 400 on every
   order. The setting's own label ("PDF (hybrid, where the format supports it)")
