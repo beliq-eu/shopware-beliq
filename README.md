@@ -58,7 +58,8 @@ XML or a hybrid PDF, depending on the format you chose.
 
 ## Requirements
 
-- Shopware 6.6 or newer.
+- Shopware 6.7. 6.6 is not supported: the document renderer targets the 6.7
+  `RenderedDocument` constructor, which dropped a leading parameter 6.6 still has.
 - PHP 8.2 or newer with the `curl` and `json` extensions.
 - A beliq account and API key. The free tier is enough to evaluate the plugin.
 

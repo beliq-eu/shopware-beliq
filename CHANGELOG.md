@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Requires Shopware 6.7 (`shopware/core` `~6.7.0`). The plugin declared `^6.6`
+  but was only ever tested on 6.7, and every 6.6 release fails on the first
+  document render: 6.7 dropped the leading `$html` parameter of
+  `RenderedDocument`, so the arguments land one slot off on 6.6 and the config
+  array meets a string parameter.
 - Shipping is invoiced. Shopware keeps it on the order rather than among the
   line items, so the invoice left it out and its totals understated what the
   customer paid while still validating. It is now its own line, one per VAT rate
