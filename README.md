@@ -19,7 +19,8 @@ running Shopware instance, which is the remaining smoke step. See
 ## What it does
 
 - Reads a completed order and builds a valid EN 16931 invoice from its lines,
-  taxes, parties, and totals.
+  shipping, taxes, parties, and totals. Shipping becomes its own line, split per
+  VAT rate when the shipping method spreads its tax across the cart's rates.
 - Sends it to beliq to generate the document in the format you choose, and can
   validate it against the authority-pinned rules.
 - Stores the resulting document on the order.

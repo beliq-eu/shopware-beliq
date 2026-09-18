@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Shipping is invoiced. Shopware keeps it on the order rather than among the
+  line items, so the invoice left it out and its totals understated what the
+  customer paid while still validating. It is now its own line, one per VAT rate
+  when the shipping method spreads its tax across the cart's rates; free shipping
+  adds nothing.
 - Totals sum the line nets as emitted. Each line net is rounded once and every
   sum is taken over the rounded values, so the invoice's line total (BT-106) and
   each VAT group's taxable amount equal the sum of the lines (BR-CO-10, BR-S-08).
