@@ -19,7 +19,8 @@ running Shopware instance, which is the remaining smoke step. See
 ## What it does
 
 - Reads a completed order and builds a valid EN 16931 invoice from its lines,
-  taxes, parties, and totals.
+  shipping, taxes, parties, and totals. Shipping becomes its own line, split per
+  VAT rate when the shipping method spreads its tax across the cart's rates.
 - Sends it to beliq to generate the document in the format you choose, and can
   validate it against the authority-pinned rules.
 - Stores the resulting document on the order.
@@ -57,7 +58,8 @@ XML or a hybrid PDF, depending on the format you chose.
 
 ## Requirements
 
-- Shopware 6.6 or newer.
+- Shopware 6.7. 6.6 is not supported: the document renderer targets the 6.7
+  `RenderedDocument` constructor, which dropped a leading parameter 6.6 still has.
 - PHP 8.2 or newer with the `curl` and `json` extensions.
 - A beliq account and API key. The free tier is enough to evaluate the plugin.
 

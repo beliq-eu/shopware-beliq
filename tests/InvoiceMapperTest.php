@@ -125,6 +125,29 @@ final class InvoiceMapperTest extends TestCase
         self::assertEqualsWithDelta(11.9, $invoice['totalGrossAmount'], 0.0001);
     }
 
+    /**
+     * BR-CO-10: the invoice's sum of line net amounts (BT-106) must equal the sum
+     * of the line nets as emitted (BT-131), and BR-S-08 holds each VAT group to
+     * the same rule. Rounding a group's unrounded sum once can land a cent away
+     * from the rounded lines whenever a line net carries more than two decimals.
+     */
+    public function testTotalsSumTheRoundedLinesNotTheUnroundedOnes(): void
+    {
+        $order = $this->order([
+            new SourceLine('First', 1.0, 8.404, 8.404, 19.0),
+            new SourceLine('Second', 1.0, 8.404, 8.404, 19.0),
+        ]);
+
+        $invoice = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice'];
+        $lineSum = round(array_sum(array_column($invoice['lines'], 'lineTotal')), 2);
+
+        self::assertEqualsWithDelta(16.80, $lineSum, 0.0001);
+        self::assertEqualsWithDelta($lineSum, $invoice['totalNetAmount'], 0.0001);
+        self::assertEqualsWithDelta($lineSum, $invoice['taxSummary'][0]['taxableAmount'], 0.0001);
+        self::assertEqualsWithDelta(3.19, $invoice['totalTaxAmount'], 0.0001);
+        self::assertEqualsWithDelta(19.99, $invoice['totalGrossAmount'], 0.0001);
+    }
+
     public function testOptionalFieldsIncludedWhenSet(): void
     {
         $order = $this->order(

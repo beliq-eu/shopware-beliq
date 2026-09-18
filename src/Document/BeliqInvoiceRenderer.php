@@ -87,6 +87,9 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 $documentNumber = $existing === 0 ? $source->number : $source->number . '-' . ($existing + 1);
 
                 $isPdf = str_contains($generated['contentType'], 'pdf');
+                // The 6.7 signature. 6.6 has a leading `string $html` parameter, so
+                // these positional arguments are a TypeError there; composer.json
+                // pins ~6.7.0 for that reason.
                 $result->addSuccess($orderId, new RenderedDocument(
                     $documentNumber,
                     'invoice-' . $documentNumber,

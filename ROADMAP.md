@@ -106,8 +106,9 @@ Verified locally with PHP 8.5 (Composer absent; PHPUnit run via `phpunit.phar`).
 
 ### Pass 1b: Shopware runtime wiring (done, with a smoke gate)
 
-Built against the real `shopware/core` (verified against v6.7.x, which satisfies
-the `^6.6` constraint): order entity graph, the state-transition event, the config
+Built against the real `shopware/core` (verified against v6.7.x; the constraint
+is `~6.7.0`, narrowed from `^6.6` on 2026-09-18 because every 6.6.x fatals on the
+6.7 `RenderedDocument` signature): order entity graph, the state-transition event, the config
 XSD, and the media subsystem.
 
 CI-verified (unit tests construct real Shopware entities and assert behaviour):
