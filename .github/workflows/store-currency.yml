@@ -17,9 +17,13 @@ on:
     - cron: '41 6 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   currency:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
