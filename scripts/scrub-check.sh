@@ -10,7 +10,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 emdash=$'\xe2\x80\x94'
-exclude=()
+exclude=(
+  # Package descriptions written by third parties; nothing here authors them.
+  ":!composer.lock"
+)
 
 status=0
 git grep -n -I -F --untracked -e "$emdash" -- . "${exclude[@]}" || status=$?
