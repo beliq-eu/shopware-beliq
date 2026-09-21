@@ -1,4 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>beliq-eu/.github:automerge"]
+  "extends": ["local>beliq-eu/.github:automerge"],
+  "packageRules": [
+    {
+      "description": "phpunit 13 requires PHP >= 8.4.1. This repo declares `php: >=8.2`, pins `config.platform.php` to 8.2.0 and runs its test matrix on 8.2, 8.3 and 8.4, because Shopware 6.7 supports all three and the plugin has to run wherever the shop does. A phpunit 13 update therefore cannot resolve on the 8.2 and 8.3 legs and the pull request can never go green (https://github.com/beliq-eu/shopware-beliq/pull/18). The PHP floor is a per-repository fact, so this hold lives here rather than in the shared beliq-eu/.github preset. Lift it when this repo's lowest supported PHP is 8.4.1 or higher, which means dropping Shopware's 8.2 and 8.3 support first.",
+      "matchPackageNames": ["phpunit/phpunit"],
+      "allowedVersions": "<13.0.0"
+    }
+  ]
 }
