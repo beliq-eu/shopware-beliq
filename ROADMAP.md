@@ -1,6 +1,6 @@
 # shopware-beliq roadmap
 
-`status: live, next: the Shopware Store producer account and submission; its live-API precondition is proven and the timing against the public launch is the operator's call`
+`status: live, next: the Packagist listing (decided 2026-09-21: Packagist first, the Shopware Store later). It needs a git tag, and tagging is its own step: the repo is untagged at 0.1.0 and the version to tag is not decided (locked decision 6)`
 
 A Shopware 6 plugin that turns store orders into compliant EN 16931 e-invoices
 (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) through the beliq API. beliq produces
@@ -302,18 +302,33 @@ Scheduled fires slip (GitHub delays daily crons by 11 to 13 hours in measured
 cases); weekly is sized for that. A failed scheduled run notifies the account
 that last touched the cron, which is the only thing watching it.
 
-## Operator-gated (post-go-live)
+## Operator-gated
 
-- Shopware Store (Community Store) producer account + manual review submission,
-  and/or Packagist listing. Documented here; not part of the code build. **The
-  live API and a card-free evaluation key are proven against production as of
-  2026-09-07:** signup needs no card, a new org lands on Free (20 documents a
-  month at 10 requests a minute), and a free-tier live key generated an XRechnung
-  3.0 document that re-validated with 0 errors. The walkthrough and evidence are
-  in `../woocommerce-beliq/PASS-3-SMOKE-ROADMAP.md` step 1, which covers the
-  shared beliq-side precondition rather than anything WooCommerce-specific. What
-  remains is the producer account, a test store, and the decision to submit ahead
-  of the public launch announcement.
+- **Packagist first, the Shopware Store later (decided 2026-09-21).** The Store
+  needs the Technology partner agreement, which carries an annual fee plus a
+  revenue share, because the plugin is an interface to a paid third-party
+  service. Packagist is free, and the `beliq` vendor and this package name were
+  unclaimed when the decision was taken. The Store is revisited after go-live.
+  The decision and what would reverse it are in
+  `beliq-hq/CONNECTORS-ROADMAP.md`, "Decided 2026-09-21: Packagist first for
+  both PHP plugins, Store later".
+- Packagist listing: self-serve, no review. Packagist derives versions from git
+  tags and this repo has none, so the listing waits on tagging, which is its own
+  step. The version to tag is not decided: it stays `0.1.0` until the publish
+  pass settles it (locked decision 6), and `composer.json` pins `"version":
+  "0.1.0"`, so the tag has to match whatever that field says. **The live API and
+  a card-free evaluation key are proven against production as of 2026-09-07:**
+  signup needs no card, a new org lands on Free (20 documents a month at 10
+  requests a minute), and a free-tier live key generated an XRechnung 3.0
+  document that re-validated with 0 errors. The walkthrough and evidence are in
+  `../woocommerce-beliq/PASS-3-SMOKE-ROADMAP.md` step 1, which covers the shared
+  beliq-side precondition rather than anything WooCommerce-specific.
+  `.gitattributes` export-ignores the dev-only paths, so the archive both
+  Packagist and `shopware-cli extension package` build from carries only
+  `composer.json`, `src/`, `README.md`, `CHANGELOG.md` and `LICENSE`.
+- Shopware Store (Community Store), after go-live: the Technology partner
+  agreement, the producer account, a test store, and the manual review
+  submission.
 - Live-key smoke: the beliq half is done (see above). What is still unrun for this
   plugin is the smoke against production rather than a local api + engine, and
   that gap is no longer theoretical. Pointing WooCommerce's harness at production
