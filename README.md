@@ -7,13 +7,41 @@ and tax-authority reporting stay with your access point.
 
 ## Status
 
-The framework-agnostic core is implemented and tested: the order-to-EN 16931
-mapper (VAT category derivation, tax breakdown, EN 16931 rounding and totals) and
-the beliq API client. The Shopware runtime wiring is in place: an order-state
-subscriber runs the mapper and stores the generated document, driven by admin
-settings. The order-to-`SourceOrder` adapter and the config mapping are unit
-tested; the end-to-end path (subscriber firing, media storage) is verified on a
-running Shopware instance, which is the remaining smoke step.
+Built and unit tested:
+
+- The framework-agnostic core: the order-to-EN 16931 mapper (VAT category
+  derivation, tax breakdown, EN 16931 rounding and totals) and the beliq API
+  client.
+- The Shopware runtime wiring. An order-state subscriber listens for payment
+  paid and order completed. On the one the merchant picked, it asks Shopware's
+  `DocumentGenerator` for a `beliq_invoice` document. That document type's
+  renderer reloads the order, applies the business-only gate, maps the order,
+  calls the beliq API, and hands back the bytes, which Shopware stores as an
+  order document.
+
+Every pull request and push to `main` runs the PHPUnit suite on PHP 8.2, 8.3
+and 8.4, plus the Shopware Store check
+(`shopware-cli extension validate --store-compliance`). The Store check also
+runs weekly.
+
+Verified end to end on a local Shopware 6.7 (Dockware) instance talking to a
+local beliq API and engine. A business order's
+paid transition fired the subscriber and produced a `beliq_invoice` document
+with its file on disk, for both XML and hybrid-PDF output. Generating again
+from the admin produced a second document with its own number. Separately,
+XRechnung and German Peppol BIS invoices built by the plugin's mapper and client
+validated with zero errors against the same local API and engine
+(`LiveGenerateSmokeTest`, which runs only when `BELIQ_API_KEY` is set).
+
+Still open:
+
+- The Dockware run has not been repeated against the production API
+  (`api.beliq.eu`).
+- The plugin is not published. The repository has no git tag, and Packagist
+  builds its releases from tags.
+- Non-standard VAT categories (reverse charge, intra-community, export) carry no
+  exemption reason. The beliq API accepts one; the plugin does not send it.
+
 
 ## What it does
 
