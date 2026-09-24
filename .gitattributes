@@ -1,0 +1,13 @@
+# Left out of `git archive`, which builds both published artifacts: the
+# Composer dist (GitHub's zipball, which Packagist serves) and the Shopware
+# Store zip (`shopware-cli extension package` exports the commit through git).
+# Keep CHANGELOG.md in: the Store reads its release notes from it.
+/.gitattributes export-ignore
+/.github export-ignore
+/.gitignore export-ignore
+/composer.lock export-ignore
+/phpunit.xml export-ignore
+/renovate.json export-ignore
+/ROADMAP.md export-ignore
+/scripts export-ignore
+/tests export-ignore
