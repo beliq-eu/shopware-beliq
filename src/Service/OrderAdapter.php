@@ -87,7 +87,7 @@ final class OrderAdapter
     }
 
     /**
-     * The buyer reference (BT-10). XRechnung requires it (BR-DE-1) and Peppol BIS
+     * The buyer reference (BT-10). XRechnung requires it (BR-DE-15) and Peppol BIS
      * accepts it in place of an order reference. A merchant routing to a public
      * administration sets the buyer's Leitweg-ID in the order custom field; for a
      * plain commercial order it falls back to the buyer's customer number, then to
