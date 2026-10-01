@@ -195,7 +195,7 @@ EN 16931 body are mapped:
   payment means is assembled only when an IBAN is set, since BR-DE-23-a rejects a
   code-58 transfer with no IBAN and a transfer with no account is not payable. The
   order number becomes the payment reference (BT-83).
-- **Buyer reference (BT-10, BR-DE-1):** the adapter fills it from the order custom
+- **Buyer reference (BT-10, BR-DE-15):** the adapter fills it from the order custom
   field `beliq_buyer_reference` (a public-sector buyer's Leitweg-ID), falling back to
   the buyer's customer number, then the order number, so it is always present.
 - **Electronic addresses (BT-34 / BT-49):** already produced by the engine, so no
