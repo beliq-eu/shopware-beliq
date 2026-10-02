@@ -44,3 +44,6 @@ jobs:
           version: latest
       - name: Shopware Store validation
         run: shopware-cli extension validate . --store-compliance
+
+  public-scrub:
+    uses: beliq-eu/.github/.github/workflows/public-scrub.yml@main
