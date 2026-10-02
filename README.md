@@ -42,7 +42,6 @@ Still open:
 - Non-standard VAT categories (reverse charge, intra-community, export) carry no
   exemption reason. The beliq API accepts one; the plugin does not send it.
 
-
 ## What it does
 
 - Reads a completed order and builds a valid EN 16931 invoice from its lines,
@@ -64,7 +63,8 @@ generation to all orders.
 
 Lines taxed at a standard rate are mapped to VAT category `S`. A zero-rated line
 takes a merchant-configured category (default `Z`). Cross-border reverse charge
-and intra-community supply are the merchant's call to configure; they are not auto-detected.
+and intra-community supply are the merchant's call to configure. They are not
+auto-detected: a wrong guess in a compliance tool is worse than none.
 
 ## Setup
 

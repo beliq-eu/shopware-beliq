@@ -8,7 +8,8 @@ namespace Beliq\Shopware\Invoice;
  * a beliq generate body. dueDate, issueDate are ISO dates (YYYY-MM-DD).
  *
  * zeroRateCategory is the VAT category used for lines taxed at 0%. It defaults to
- * Z (zero-rated). The merchant owns this choice.
+ * Z (zero-rated). The merchant owns this choice. Reverse charge is not
+ * auto-detected: a wrong guess in a compliance tool is worse than none.
  */
 final readonly class SourceOrder
 {
