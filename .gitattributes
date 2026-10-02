@@ -8,7 +8,6 @@
 /composer.lock export-ignore
 /phpunit.xml export-ignore
 /renovate.json export-ignore
-/ROADMAP.md export-ignore
 /scripts export-ignore
 /tests export-ignore
 /AGENTS.md export-ignore
