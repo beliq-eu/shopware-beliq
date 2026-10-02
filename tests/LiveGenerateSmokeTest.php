@@ -65,7 +65,7 @@ final class LiveGenerateSmokeTest extends TestCase
     /**
      * A domestic (DE to DE) Peppol BIS invoice additionally has to satisfy the German
      * CIUS rules DE-R-002/005/006/007 (the seller contact group BG-6). The plugin sends
-     * the seller contact and the engine emits it as cac:Contact (tobias-dev/bq-engine#119),
+     * the seller contact and the engine emits it as cac:Contact,
      * so this validates green against an engine carrying that build.
      */
     public function testPeppolBisFromAGermanBusinessOrderValidatesGreen(): void
