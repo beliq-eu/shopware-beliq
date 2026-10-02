@@ -33,7 +33,7 @@ final class OrderAdapter
 {
     /**
      * Order custom field a merchant can set to route to a public-sector buyer:
-     * its Leitweg-ID becomes the buyer reference (BT-10). See ROADMAP.md.
+     * its Leitweg-ID becomes the buyer reference (BT-10).
      */
     private const BUYER_REFERENCE_FIELD = 'beliq_buyer_reference';
 

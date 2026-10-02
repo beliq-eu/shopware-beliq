@@ -25,7 +25,7 @@ and 8.4, plus the Shopware Store check
 runs weekly.
 
 Verified end to end on a local Shopware 6.7 (Dockware) instance talking to a
-local beliq API and engine (ROADMAP.md, passes 1c and 1e). A business order's
+local beliq API and engine. A business order's
 paid transition fired the subscriber and produced a `beliq_invoice` document
 with its file on disk, for both XML and hybrid-PDF output. Generating again
 from the admin produced a second document with its own number. Separately,
@@ -41,8 +41,6 @@ Still open:
   builds its releases from tags.
 - Non-standard VAT categories (reverse charge, intra-community, export) carry no
   exemption reason. The beliq API accepts one; the plugin does not send it.
-
-See [ROADMAP.md](https://github.com/beliq-eu/shopware-beliq/blob/main/ROADMAP.md).
 
 ## What it does
 
@@ -65,9 +63,8 @@ generation to all orders.
 
 Lines taxed at a standard rate are mapped to VAT category `S`. A zero-rated line
 takes a merchant-configured category (default `Z`). Cross-border reverse charge
-and intra-community supply are the merchant's call to configure; see
-[ROADMAP.md](https://github.com/beliq-eu/shopware-beliq/blob/main/ROADMAP.md)
-for why they are not auto-detected.
+and intra-community supply are the merchant's call to configure. They are not
+auto-detected: a wrong guess in a compliance tool is worse than none.
 
 ## Setup
 

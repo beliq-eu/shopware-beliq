@@ -51,8 +51,8 @@ final readonly class PluginConfig
 
     /**
      * Whether the plugin should generate for this order. With the business-only
-     * scope (the default) a private-consumer order is skipped; see ROADMAP.md on
-     * why the safe default is narrow.
+     * scope (the default) a private-consumer order is skipped: checkout data for
+     * a consumer is often too thin to form a clean invoice.
      */
     public function allowsOrder(SourceOrder $order): bool
     {
