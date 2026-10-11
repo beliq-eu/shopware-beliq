@@ -4,9 +4,10 @@
 # rule would first surface at upload time, months from now.
 #
 # This runs the same command ci.yml runs, so the two cannot drift. A failure
-# means the Store's rules moved, not that the code broke. GitHub notifies the
-# account that last touched the cron when a scheduled run fails, which is the
-# only thing watching this.
+# means the Store's rules moved, or a newer PHPStan inside shopware-cli found
+# something at the level 8 that phpstan.neon sets; neither needs a commit here
+# to happen. GitHub notifies the account that last touched the cron when a
+# scheduled run fails, which is the only thing watching this.
 #
 # Delivery slips: GitHub drops and delays scheduled fires, daily crons by 11 to
 # 13 hours in measured cases. Weekly is sized for that, not for punctuality.
