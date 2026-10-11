@@ -125,7 +125,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         $criteria->addAssociation('orderCustomer.customer');
         $criteria->addAssociation('currency');
 
-        $order = $this->orderRepository->search($criteria, $context)->first();
+        $order = $this->orderRepository->search($criteria, $context)->getEntities()->first();
 
         return $order instanceof OrderEntity ? $order : null;
     }
