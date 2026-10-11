@@ -12,6 +12,7 @@ use Shopware\Core\Checkout\Document\Renderer\AbstractDocumentRenderer;
 use Shopware\Core\Checkout\Document\Renderer\DocumentRendererConfig;
 use Shopware\Core\Checkout\Document\Renderer\RenderedDocument;
 use Shopware\Core\Checkout\Document\Renderer\RendererResult;
+use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -36,6 +37,9 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
     /** Technical name of the beliq document type (see the registering migration). */
     public const TYPE = 'beliq_invoice';
 
+    /**
+     * @param EntityRepository<OrderCollection> $orderRepository
+     */
     public function __construct(
         private readonly EntityRepository $orderRepository,
         private readonly PluginConfigProvider $configProvider,

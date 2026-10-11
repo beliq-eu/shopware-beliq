@@ -38,7 +38,8 @@ final class CurlHttpClient implements HttpClient
             CURLOPT_HTTPHEADER => $headerLines,
             CURLOPT_TIMEOUT => $this->timeoutSeconds,
             CURLOPT_CONNECTTIMEOUT => $this->connectTimeoutSeconds,
-            CURLOPT_POSTFIELDS => $body,
+            // ext-curl sends a null body as '' too, so a GET carries an empty body either way.
+            CURLOPT_POSTFIELDS => $body ?? '',
             CURLOPT_HEADERFUNCTION => static function ($_handle, string $line) use (&$responseHeaders): int {
                 $parts = explode(':', $line, 2);
                 if (count($parts) === 2) {

@@ -1,0 +1,10 @@
+# shopware-cli extension validate, which the store-validate job runs, reads this
+# file in place of its own PHPStan config. Including that config keeps the
+# Store's rules (Shopware's deprecation and disallowed-call checks); this file
+# raises the level. shopware-cli sets PHP_DIR to its tool directory, so the file
+# works only under shopware-cli. Left out of the Store zip by .gitattributes.
+includes:
+    - %env.PHP_DIR%/configs/phpstan.neon
+
+parameters:
+    level: 8

@@ -2,6 +2,7 @@
 
 namespace Beliq\Shopware\Document;
 
+use Shopware\Core\Checkout\Document\DocumentCollection;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -16,6 +17,9 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
  */
 final class InvoiceDocumentLookup
 {
+    /**
+     * @param EntityRepository<DocumentCollection> $documentRepository
+     */
     public function __construct(private readonly EntityRepository $documentRepository)
     {
     }
