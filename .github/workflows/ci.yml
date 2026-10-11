@@ -34,6 +34,10 @@ jobs:
   # step is the verdict. The CLI is deliberately unpinned, because a pinned copy
   # of the rules would pass here and still be rejected on upload; a new rule
   # reddening this job is the gate reporting that the Store's rules moved.
+  # Its PHPStan check runs at level 8 here, set by the root phpstan.neon. The
+  # Store zip leaves that file out, so the upload runs shopware-cli's own level
+  # 5 and this job is the stricter of the two: a red with no commit here can
+  # also be a newer PHPStan inside shopware-cli finding something at level 8.
   store-validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15

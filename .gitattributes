@@ -6,6 +6,7 @@
 /.github export-ignore
 /.gitignore export-ignore
 /composer.lock export-ignore
+/phpstan.neon export-ignore
 /phpunit.xml export-ignore
 /renovate.json export-ignore
 /scripts export-ignore

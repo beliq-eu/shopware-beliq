@@ -22,7 +22,9 @@ Built and unit tested:
 Every pull request and push to `main` runs the PHPUnit suite on PHP 8.2, 8.3
 and 8.4, plus the Shopware Store check
 (`shopware-cli extension validate --store-compliance`). The Store check also
-runs weekly.
+runs weekly. It includes PHPStan, which `phpstan.neon` sets to level 8 over the
+plugin code outside `tests/`, on top of shopware-cli's own Shopware deprecation
+and disallowed-call rules.
 
 Verified end to end on a local Shopware 6.7 (Dockware) instance talking to a
 local beliq API and engine. A business order's
@@ -95,6 +97,7 @@ XML or a hybrid PDF, depending on the format you chose.
 composer install
 composer test          # PHPUnit
 composer scrub:check   # fail on em-dash
+shopware-cli extension validate . --store-compliance   # Store check, PHPStan at level 8
 ```
 
 The mapper and client tests run without a Shopware install. A live smoke against
