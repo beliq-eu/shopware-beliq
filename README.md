@@ -7,6 +7,10 @@ and tax-authority reporting stay with your access point.
 
 ## Status
 
+Version 0.1.0 is on Packagist as
+[`beliq/shopware-beliq`](https://packagist.org/packages/beliq/shopware-beliq),
+built from the tag `v0.1.0`. It is not in the Shopware Store.
+
 Built and unit tested:
 
 - The framework-agnostic core: the order-to-EN 16931 mapper (VAT category
@@ -33,14 +37,14 @@ with its file on disk, for both XML and hybrid-PDF output. Generating again
 from the admin produced a second document with its own number. Separately,
 XRechnung and German Peppol BIS invoices built by the plugin's mapper and client
 validated with zero errors against the same local API and engine
-(`LiveGenerateSmokeTest`, which runs only when `BELIQ_API_KEY` is set).
+(`LiveGenerateSmokeTest`, which runs only when `BELIQ_API_KEY` is set). On
+2026-11-05 the same test passed 3 of 3 against the production API, a Peppol BIS
+invoice from a non-German order included.
 
 Still open:
 
 - The Dockware run has not been repeated against the production API
   (`api.beliq.eu`).
-- The plugin is not published. The repository has no git tag, and Packagist
-  builds its releases from tags.
 - Non-standard VAT categories (reverse charge, intra-community, export) carry no
   exemption reason. The beliq API accepts one; the plugin does not send it.
 
@@ -67,6 +71,20 @@ Lines taxed at a standard rate are mapped to VAT category `S`. A zero-rated line
 takes a merchant-configured category (default `Z`). Cross-border reverse charge
 and intra-community supply are the merchant's call to configure. They are not
 auto-detected: a wrong guess in a compliance tool is worse than none.
+
+## Install
+
+In the root of your Shopware 6.7 project:
+
+```bash
+composer require beliq/shopware-beliq
+bin/console plugin:refresh
+bin/console plugin:install --activate BeliqShopware
+bin/console cache:clear
+```
+
+`BeliqShopware` is the plugin's name in Shopware, taken from its plugin class.
+Then configure it as described under Setup.
 
 ## Setup
 
