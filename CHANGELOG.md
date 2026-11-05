@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0
+## 0.1.0 (2026-11-05)
 
 - Requires Shopware 6.7 (`shopware/core` `~6.7.0`). The plugin declared `^6.6`
   but was only ever tested on 6.7, and every 6.6 release fails on the first
