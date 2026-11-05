@@ -31,4 +31,7 @@ jobs:
         with:
           version: latest
       - name: Shopware Store validation
+        # Same variable as ci.yml's store-validate step, for the same reason.
+        env:
+          SHOPWARE_CLI_PHPSTAN_TMP_DIR: ${{ runner.temp }}/phpstan
         run: shopware-cli extension validate . --store-compliance
