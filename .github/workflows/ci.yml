@@ -47,6 +47,11 @@ jobs:
         with:
           version: latest
       - name: Shopware Store validation
+        # phpstan.neon includes shopware-cli's own config, which reads its tmpDir
+        # from this variable since shopware-cli 0.19.8. shopware-cli sets it only
+        # for an extension without a phpstan.neon, so the job sets it here.
+        env:
+          SHOPWARE_CLI_PHPSTAN_TMP_DIR: ${{ runner.temp }}/phpstan
         run: shopware-cli extension validate . --store-compliance
 
   guard:
