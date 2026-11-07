@@ -55,12 +55,14 @@ final class CurlHttpClient implements HttpClient
         $responseBody = curl_exec($handle);
         if ($responseBody === false) {
             $error = curl_error($handle);
-            // libcurl leaves the connect time at 0 until the connection is up, its
-            // TLS handshake included (measured on libcurl 8.14 and 8.22), so a
-            // timeout with no connect time came before the request was sent.
+            // The request was sent only once TCP was up and, for HTTPS, the TLS
+            // handshake had finished. Some libcurl builds report the TCP connect
+            // time of a handshake that then stalls, so the TLS time is read too.
+            $tlsDone = strtolower((string) curl_getinfo($handle, CURLINFO_SCHEME)) !== 'https'
+                || (float) curl_getinfo($handle, CURLINFO_APPCONNECT_TIME) > 0.0;
             $kind = BeliqTransportException::kindForCurlError(
                 curl_errno($handle),
-                (float) curl_getinfo($handle, CURLINFO_CONNECT_TIME) > 0.0,
+                (float) curl_getinfo($handle, CURLINFO_CONNECT_TIME) > 0.0 && $tlsDone,
             );
             curl_close($handle);
             throw new BeliqTransportException($kind, 'beliq request failed: ' . $error);
