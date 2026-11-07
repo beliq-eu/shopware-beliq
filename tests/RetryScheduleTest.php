@@ -36,11 +36,13 @@ final class RetryScheduleTest extends TestCase
         yield 'connection refused' => [new BeliqTransportException(BeliqTransportException::CONNECT_FAILED, 'x'), false, RetrySchedule::WINDOW];
         yield 'connect timeout' => [new BeliqTransportException(BeliqTransportException::CONNECT_TIMEOUT, 'x'), false, RetrySchedule::WINDOW];
         // The named departure: the order request's own 30 s can be shorter than
-        // beliq's own deadlines, so it starts the later attempts once.
-        yield "the order request's own timeout" => [new BeliqTransportException(BeliqTransportException::TIMEOUT, 'x'), true, RetrySchedule::WINDOW];
+        // beliq's own deadlines, so it starts the later attempts, as a request
+        // that may have run.
+        yield "the order request's own timeout" => [new BeliqTransportException(BeliqTransportException::TIMEOUT, 'x'), true, RetrySchedule::COUNT];
         yield "a later attempt's own timeout" => [new BeliqTransportException(BeliqTransportException::TIMEOUT, 'x'), false, RetrySchedule::NONE];
         yield 'connection lost after the send' => [new BeliqTransportException(BeliqTransportException::CONNECTION_LOST, 'x'), true, RetrySchedule::COUNT];
         yield 'TLS failure' => [new BeliqTransportException(BeliqTransportException::TLS, 'x'), true, RetrySchedule::NONE];
+        yield 'a wrong base URL' => [new BeliqTransportException(BeliqTransportException::CONFIGURATION, 'x'), true, RetrySchedule::NONE];
         yield 'a mapping error' => [new \RuntimeException('Order has no billing address.'), true, RetrySchedule::NONE];
     }
 
@@ -89,6 +91,47 @@ final class RetryScheduleTest extends TestCase
 
         self::assertNotNull($state);
         self::assertSame(self::T0 + 120, $state->nextAttemptAt);
+    }
+
+    public function testSlotsThatPassedDuringALongRetryAfterAreSkipped(): void
+    {
+        $state = RetrySchedule::afterFailure(
+            RetrySchedule::start(self::T0),
+            self::api(503, 'DATABASE_UNAVAILABLE', retryAfter: 2400),
+            self::T0,
+        );
+        self::assertNotNull($state);
+        self::assertSame(self::T0 + 2400, $state->nextAttemptAt);
+
+        $now = $state->nextAttemptAt;
+        $state = RetrySchedule::afterFailure(RetrySchedule::claim($state, $now), self::api(503, 'DATABASE_UNAVAILABLE'), $now);
+
+        // Not 300, 600 and 840 one after another: the next slot still ahead.
+        self::assertNotNull($state);
+        self::assertSame(self::T0 + 3600, $state->nextAttemptAt);
+    }
+
+    public function testARetryAfterPastTheWindowEndsTheRetries(): void
+    {
+        self::assertNull(RetrySchedule::afterFailure(
+            RetrySchedule::start(self::T0),
+            self::api(503, 'DATABASE_UNAVAILABLE', retryAfter: 86_400),
+            self::T0,
+        ));
+    }
+
+    public function testACountClassRetryExpiresAfterItsFifteenMinutes(): void
+    {
+        $state = RetrySchedule::afterFailure(RetrySchedule::start(self::T0), self::api(503, 'ENGINE_UNAVAILABLE'), self::T0);
+        self::assertNotNull($state);
+        self::assertSame(self::T0 + RetrySchedule::COUNT_CLASS_WINDOW_SECONDS, $state->notAfter);
+
+        self::assertFalse(RetrySchedule::expired($state, self::T0 + 120));
+        self::assertTrue(RetrySchedule::expired($state, self::T0 + 901));
+
+        $outage = RetrySchedule::afterFailure(RetrySchedule::start(self::T0), self::api(503, 'DATABASE_UNAVAILABLE'), self::T0);
+        self::assertNotNull($outage);
+        self::assertFalse(RetrySchedule::expired($outage, self::T0 + 3000));
     }
 
     public function testCountClassStopsAfterThreeRetries(): void

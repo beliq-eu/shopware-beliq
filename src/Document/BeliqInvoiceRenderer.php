@@ -3,8 +3,6 @@
 namespace Beliq\Shopware\Document;
 
 use Beliq\Shopware\Config\PluginConfigProvider;
-use Beliq\Shopware\Retry\FailureRecorder;
-use Beliq\Shopware\Retry\OrderFailureFields;
 use Beliq\Shopware\Service\BeliqClient;
 use Beliq\Shopware\Service\CurlHttpClient;
 use Beliq\Shopware\Service\HttpClient;
@@ -48,7 +46,6 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         private readonly OrderAdapter $adapter,
         private readonly InvoiceMapper $mapper,
         private readonly InvoiceDocumentLookup $documents,
-        private readonly FailureRecorder $failures,
         private readonly HttpClient $http = new CurlHttpClient(),
     ) {
     }
@@ -105,12 +102,6 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     $isPdf ? 'application/pdf' : 'application/xml',
                     $generated['bytes'],
                 ));
-
-                // A stored invoice, automatic or from the Documents card, ends what
-                // an earlier failed automatic attempt shows on the order.
-                if (($order->getCustomFields()[OrderFailureFields::FAILURE] ?? null) !== null) {
-                    $this->failures->clear($order->getId(), $context);
-                }
             } catch (\Throwable $exception) {
                 $result->addError($orderId, $exception);
             }

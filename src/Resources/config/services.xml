@@ -26,7 +26,6 @@
             <argument type="service" id="Beliq\Shopware\Service\OrderAdapter"/>
             <argument type="service" id="Beliq\Shopware\Service\InvoiceMapper"/>
             <argument type="service" id="Beliq\Shopware\Document\InvoiceDocumentLookup"/>
-            <argument type="service" id="Beliq\Shopware\Retry\OrderCustomFieldRecorder"/>
             <argument type="service" id="Beliq\Shopware\Service\HttpClient"/>
             <tag name="document.renderer"/>
         </service>

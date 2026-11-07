@@ -126,6 +126,23 @@ final class CurlHttpClientTest extends TestCase
         }
     }
 
+    public function testAStalledTlsHandshakeIsAConnectTimeout(): void
+    {
+        // The handshake completes in the kernel; the ClientHello is never answered.
+        $silent = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertNotFalse($silent);
+        $url = 'https://' . stream_socket_get_name($silent, false) . '/';
+
+        try {
+            self::assertSame(
+                BeliqTransportException::CONNECT_TIMEOUT,
+                $this->failureKind(new CurlHttpClient(self::TOTAL_TIMEOUT, self::CONNECT_TIMEOUT), $url),
+            );
+        } finally {
+            fclose($silent);
+        }
+    }
+
     public function testA503CarriesItsRetryAfterThroughTheClient(): void
     {
         $server = new StubServer([[
@@ -145,6 +162,15 @@ final class CurlHttpClientTest extends TestCase
         } finally {
             $server->stop();
         }
+    }
+
+    public function testErrorsAWaitCannotFixAreNotReadAsALostConnection(): void
+    {
+        self::assertSame(BeliqTransportException::CONFIGURATION, BeliqTransportException::kindForCurlError(3, false));
+        self::assertSame(BeliqTransportException::CONFIGURATION, BeliqTransportException::kindForCurlError(1, false));
+        self::assertSame(BeliqTransportException::TLS, BeliqTransportException::kindForCurlError(60, false));
+        self::assertSame(BeliqTransportException::TLS, BeliqTransportException::kindForCurlError(59, false));
+        self::assertSame(BeliqTransportException::CONNECTION_LOST, BeliqTransportException::kindForCurlError(56, true));
     }
 
     private function failureKind(CurlHttpClient $client, string $url): string

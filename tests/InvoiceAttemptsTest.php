@@ -116,6 +116,32 @@ final class InvoiceAttemptsTest extends TestCase
         self::assertNull($this->store()->find($this->orderId));
     }
 
+    public function testARetryOfARequestThatMayHaveRunIsDroppedWhenTheTaskRunsTooLate(): void
+    {
+        $this->generation->script = [new BeliqApiException('engine', 'ENGINE_UNAVAILABLE', 503), true];
+
+        $this->attempts()->first($this->orderId, $this->salesChannelId, Context::createDefaultContext());
+        // No task ran for 20 minutes.
+        $this->clock->set(self::T0 + 1200);
+        $this->attempts()->runDue(Context::createDefaultContext());
+
+        self::assertCount(1, $this->generation->calls);
+        self::assertNull($this->store()->find($this->orderId));
+        $last = $this->recorder->failures[array_key_last($this->recorder->failures)];
+        self::assertSame('ENGINE_UNAVAILABLE (HTTP 503)', $last['description']);
+        self::assertNull($last['nextAttemptAt']);
+    }
+
+    public function testAFirstAttemptThatSucceedsLeavesTheOrderAsItIs(): void
+    {
+        $this->attempts()->first($this->orderId, $this->salesChannelId, Context::createDefaultContext());
+
+        self::assertSame(1, $this->generation->successes);
+        self::assertSame([], $this->recorder->failures);
+        self::assertSame([], $this->recorder->cleared);
+        self::assertNull($this->store()->find($this->orderId));
+    }
+
     public function testEngineUnavailableIsRetriedThreeTimesAtMost(): void
     {
         $this->generation->script = [new BeliqApiException('engine', 'ENGINE_UNAVAILABLE', 503)];

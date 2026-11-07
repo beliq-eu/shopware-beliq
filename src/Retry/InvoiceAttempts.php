@@ -67,6 +67,15 @@ final class InvoiceAttempts
             return false;
         }
 
+        // A retry of a request that may have run, due inside the first 15
+        // minutes, whose task ran too late to start it there.
+        if (RetrySchedule::expired($seen, $this->now())) {
+            $this->store->delete($orderId);
+            $this->recorder->recordFailure($orderId, $lastError ?? 'no answer', $this->now(), null, $context);
+
+            return false;
+        }
+
         $claimed = RetrySchedule::claim($seen, $this->now());
         if (!$this->store->claim($orderId, $seen, $claimed, $this->now())) {
             return false;
@@ -88,6 +97,11 @@ final class InvoiceAttempts
         }
 
         $this->store->delete($orderId);
+        // Only a later attempt follows a failure the order shows; a first
+        // attempt that succeeds leaves the order as it is.
+        if (!$laterAttempt) {
+            return;
+        }
         if ($attempted) {
             $this->recorder->clear($orderId, $context);
         } else {

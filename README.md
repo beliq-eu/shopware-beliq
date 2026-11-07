@@ -115,17 +115,24 @@ follows the beliq SDKs (`src/Retry/RetrySchedule.php`):
   minutes after the first attempt, or later when beliq's `Retry-After` asks for
   longer: a 503 `DATABASE_UNAVAILABLE`, a 502 or 503 without a beliq error code,
   and a connection that could not be opened.
-- A failure that may have run at beliq is tried at most 3 times, all within the
-  first 15 minutes, a span in which beliq does not charge the same request
-  twice: `ENGINE_UNAVAILABLE` or another coded 502 or 503, a 429 other than
-  `QUOTA_EXCEEDED`, and a connection lost after the request was sent.
-- The first attempt runs inside the state change with a 30 s timeout; when that
-  runs out, the later attempts take over with the 90 s of the SDKs. A later
-  attempt's own timeout is final, since beliq may still be working on the
-  document.
+- A failure that may have run at beliq is tried at most 3 times, and only within
+  the first 15 minutes, however late the task runs: `ENGINE_UNAVAILABLE` or
+  another coded 502 or 503, a 429 other than `QUOTA_EXCEEDED`, a connection lost
+  after the request was sent, and the first attempt's own timeout. beliq does
+  not charge a repeat of a request it charged in the last 15 minutes, with a key
+  of the same mode, up to 10 repeats
+  ([Repeated requests](https://docs.beliq.eu/api-reference/errors/#repeated-requests-are-not-charged-again));
+  a later repeat of a request whose answer was lost would be charged again.
+- The first attempt runs inside the state change with a 30 s timeout; the later
+  attempts have the 90 s of the SDKs. A later attempt's own timeout is final,
+  since beliq may still be working on the document.
+- A slot that passed while beliq asked for a longer wait, or while no task ran,
+  is skipped rather than run straight after. A `Retry-After` that would push an
+  attempt past the 60-minute slot ends the retries.
 - Nothing else is retried: a 4xx would send the same order data to the same
-  answer. The failure stays on the order next to the Documents card, where a
-  beliq e-invoice can be created by hand.
+  answer, and a TLS failure or a malformed base URL is not fixed by waiting. The
+  failure stays on the order next to the Documents card, where a beliq
+  e-invoice can be created by hand.
 
 The later attempts are rows in the plugin's `beliq_invoice_retry` table, worked
 through by the scheduled task `beliq.invoice_retry` every minute. A shop that
@@ -135,8 +142,10 @@ someone is logged into the Administration (Shopware's admin worker), so run
 production, as Shopware's own documentation recommends. Each attempt advances
 its row before it calls beliq, so a process killed mid-call leaves the next
 attempt in place, and a claim is a conditional update, so two task runs never
-attempt one order at once. A stored beliq invoice, automatic or by hand, clears
-the failure. The slots and timeouts are beliq's choice, sized from its own
+attempt one order at once. A later attempt that stores the invoice clears the
+failure; an invoice created by hand keeps the record of the last automatic
+failure, and ends any pending attempt (automatic generation never overwrites).
+A deleted order takes its row with it. The slots and timeouts are beliq's choice, sized from its own
 outages; no standard sets them.
 
 Uninstalling the plugin without keeping its data drops the table and the custom

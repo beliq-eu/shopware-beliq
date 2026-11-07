@@ -17,8 +17,16 @@ use Beliq\Shopware\Exception\BeliqTransportException;
  * because beliq does not charge a repeat of the same request inside 15 minutes.
  * Everything else would send the same body to the same answer again, so it is
  * never retried. One departure from the SDKs: the order request's own timeout is
- * shorter than beliq's deadlines, so it starts the later attempts; a later
- * attempt's own timeout is final.
+ * shorter than beliq's deadlines, so it counts as a failure of the count class (the
+ * request was sent and may have run); a later attempt's own timeout is final.
+ *
+ * beliq does not charge a repeat of a request it charged in the last 15 minutes,
+ * with a key of the same mode, up to 10 repeats:
+ * https://docs.beliq.eu/api-reference/errors/#repeated-requests-are-not-charged-again
+ * Past that, a repeat of a request whose answer was lost is charged again, so a
+ * count-class retry never starts after the first 15 minutes, however late the
+ * task runs. A Retry-After that would push an attempt past the window's last slot
+ * ends the retries.
  *
  * The slots and the timeouts are beliq's choice, sized from its own outages; no
  * standard sets them.
@@ -46,6 +54,7 @@ final class RetrySchedule
      */
     public const ATTEMPT_LEASE_SECONDS = 120;
 
+    // beliq error codes, as the API's error list names them (openapi.json).
     private const QUOTA_EXHAUSTED_CODE = 'QUOTA_EXCEEDED';
     private const DATABASE_UNAVAILABLE_CODE = 'DATABASE_UNAVAILABLE';
 
@@ -58,9 +67,9 @@ final class RetrySchedule
         if ($failure instanceof BeliqTransportException) {
             return match ($failure->kind) {
                 BeliqTransportException::CONNECT_FAILED, BeliqTransportException::CONNECT_TIMEOUT => self::WINDOW,
-                BeliqTransportException::TIMEOUT => $firstAttempt ? self::WINDOW : self::NONE,
+                BeliqTransportException::TIMEOUT => $firstAttempt ? self::COUNT : self::NONE,
                 BeliqTransportException::CONNECTION_LOST => self::COUNT,
-                BeliqTransportException::TLS => self::NONE,
+                BeliqTransportException::TLS, BeliqTransportException::CONFIGURATION => self::NONE,
             };
         }
 
@@ -82,7 +91,14 @@ final class RetrySchedule
             $laterAttempts,
             $state->countRetries,
             max(self::slot($state->firstAttemptAt, $laterAttempts) ?? 0, $now + self::ATTEMPT_LEASE_SECONDS),
+            $state->notAfter,
         );
+    }
+
+    /** True when the due attempt may not start any more: a count-class retry past its 15 minutes. */
+    public static function expired(RetryState $state, int $now): bool
+    {
+        return $state->notAfter !== null && $now > $state->notAfter;
     }
 
     /** The state after a failed attempt, or null when no attempt follows. */
@@ -101,20 +117,32 @@ final class RetrySchedule
             $countRetries++;
         }
 
-        $next = self::slot($state->firstAttemptAt, $state->laterAttempts);
-        if ($next === null) {
+        // Slots that passed while beliq asked for a longer wait, or while no task
+        // ran, are skipped rather than run back to back.
+        $laterAttempts = $state->laterAttempts;
+        while (($slot = self::slot($state->firstAttemptAt, $laterAttempts)) !== null && $slot < $now) {
+            $laterAttempts++;
+        }
+        if ($slot === null) {
             return null;
         }
+        $next = $slot;
         if ($failure instanceof BeliqApiException && $failure->retryAfterSeconds !== null) {
             $next = max($next, $now + $failure->retryAfterSeconds);
         }
-        $next = max($next, $now);
-
-        if ($class === self::COUNT && $next > $state->firstAttemptAt + self::COUNT_CLASS_WINDOW_SECONDS) {
+        if ($next > $state->firstAttemptAt + self::LATER_ATTEMPT_OFFSETS[array_key_last(self::LATER_ATTEMPT_OFFSETS)]) {
             return null;
         }
 
-        return new RetryState($state->firstAttemptAt, $state->laterAttempts, $countRetries, $next);
+        $notAfter = null;
+        if ($class === self::COUNT) {
+            $notAfter = $state->firstAttemptAt + self::COUNT_CLASS_WINDOW_SECONDS;
+            if ($next > $notAfter) {
+                return null;
+            }
+        }
+
+        return new RetryState($state->firstAttemptAt, $laterAttempts, $countRetries, $next, $notAfter);
     }
 
     public static function attemptsExhausted(RetryState $state): bool
@@ -152,7 +180,7 @@ final class RetrySchedule
         return $status === 503 && $code === self::DATABASE_UNAVAILABLE_CODE ? self::WINDOW : self::COUNT;
     }
 
-    /** When the later attempt after $laterAttempts is due, or null when none is left. */
+    /** When the slot after $laterAttempts used ones is due, or null when none is left. */
     private static function slot(int $firstAttemptAt, int $laterAttempts): ?int
     {
         $offset = self::LATER_ATTEMPT_OFFSETS[$laterAttempts] ?? null;

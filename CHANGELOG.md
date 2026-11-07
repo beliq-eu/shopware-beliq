@@ -6,9 +6,12 @@
   later. When beliq cannot be reached or answers that it is unavailable, the
   scheduled task `beliq.invoice_retry` tries again at about 2, 5, 10, 14, 30 and
   60 minutes, or later when beliq's `Retry-After` asks for it. A failure that may
-  have run at beliq is tried at most 3 times within 15 minutes, and a rejection
-  is not retried. The classes follow the beliq SDKs; see the README's "When beliq
-  is unavailable". The plugin adds the table `beliq_invoice_retry`.
+  have run at beliq (the first attempt's own timeout included) is tried at most 3
+  times and only within the first 15 minutes, however late the task runs, and a
+  rejection is not retried. A `Retry-After` beyond the 60-minute slot ends the
+  retries. The classes follow the beliq SDKs; see the README's "When beliq
+  is unavailable". The plugin adds the table `beliq_invoice_retry`, whose rows
+  go with their order or sales channel when it is deleted.
 - Every failure of the automatic invoice shows on the order, in the custom field
   set "beliq e-invoice" on its Details tab. Before, it went to the log only.
 - A transport failure says where the request stopped (the connection could not

@@ -136,7 +136,14 @@ final class BeliqClientTest extends TestCase
         };
 
         self::assertSame(30, $at('30'));
-        $date = $at(gmdate('D, d M Y H:i:s', time() + 120) . ' GMT');
+        // The date is in GMT whatever the shop's time zone.
+        $zone = date_default_timezone_get();
+        date_default_timezone_set('Europe/Berlin');
+        try {
+            $date = $at(gmdate('D, d M Y H:i:s', time() + 120) . ' GMT');
+        } finally {
+            date_default_timezone_set($zone);
+        }
         self::assertNotNull($date);
         self::assertGreaterThanOrEqual(118, $date);
         self::assertLessThanOrEqual(120, $date);

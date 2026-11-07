@@ -4,11 +4,12 @@ namespace Beliq\Shopware\Retry;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * The orders whose automatic invoice waits for a later attempt, one row per
- * order, in the plugin's own table. The scheduled task reads the due rows through
+ * order (its live version), in the plugin's own table. The scheduled task reads the due rows through
  * the index on next_attempt_at, and a claim is a conditional update, so of two
  * task runs that read the same row only one gets to call beliq.
  */
@@ -23,7 +24,7 @@ final class RetryStore
     public function find(string $orderId): ?RetryState
     {
         $row = $this->connection->fetchAssociative(
-            'SELECT first_attempt_at, later_attempts, count_retries, next_attempt_at FROM ' . self::TABLE . ' WHERE order_id = :id',
+            'SELECT first_attempt_at, later_attempts, count_retries, next_attempt_at, not_after FROM ' . self::TABLE . ' WHERE order_id = :id',
             ['id' => Uuid::fromHexToBytes($orderId)],
         );
 
@@ -36,6 +37,7 @@ final class RetryStore
         try {
             $this->connection->insert(self::TABLE, [
                 'order_id' => Uuid::fromHexToBytes($orderId),
+                'order_version_id' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
                 'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
                 'first_attempt_at' => $state->firstAttemptAt,
                 'later_attempts' => $state->laterAttempts,
@@ -54,11 +56,12 @@ final class RetryStore
     {
         return $this->connection->executeStatement(
             'UPDATE ' . self::TABLE . '
-             SET later_attempts = :claimedAttempts, next_attempt_at = :next
+             SET later_attempts = :claimedAttempts, next_attempt_at = :next, not_after = :notAfter
              WHERE order_id = :id AND later_attempts = :seenAttempts AND next_attempt_at <= :now',
             [
                 'claimedAttempts' => $claimed->laterAttempts,
                 'next' => $claimed->nextAttemptAt,
+                'notAfter' => $claimed->notAfter,
                 'id' => Uuid::fromHexToBytes($orderId),
                 'seenAttempts' => $seen->laterAttempts,
                 'now' => $now,
@@ -69,8 +72,10 @@ final class RetryStore
     public function reschedule(string $orderId, RetryState $state, string $lastError): void
     {
         $this->connection->update(self::TABLE, [
+            'later_attempts' => $state->laterAttempts,
             'count_retries' => $state->countRetries,
             'next_attempt_at' => $state->nextAttemptAt,
+            'not_after' => $state->notAfter,
             'last_error' => $lastError,
         ], ['order_id' => Uuid::fromHexToBytes($orderId)]);
     }
@@ -84,7 +89,7 @@ final class RetryStore
     public function due(int $now, int $limit): array
     {
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT order_id, sales_channel_id, first_attempt_at, later_attempts, count_retries, next_attempt_at, last_error
+            'SELECT order_id, sales_channel_id, first_attempt_at, later_attempts, count_retries, next_attempt_at, not_after, last_error
              FROM ' . self::TABLE . ' WHERE next_attempt_at <= :now ORDER BY next_attempt_at LIMIT ' . $limit,
             ['now' => $now],
         );
@@ -105,6 +110,7 @@ final class RetryStore
             (int) $row['later_attempts'],
             (int) $row['count_retries'],
             (int) $row['next_attempt_at'],
+            $row['not_after'] === null ? null : (int) $row['not_after'],
         );
     }
 }

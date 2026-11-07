@@ -9,7 +9,8 @@ use Doctrine\DBAL\DriverManager;
 /**
  * A real database for the retry store: SQLite in a file, so two connections see
  * the same rows the way two task runners see one shop's database. The table has
- * the columns of the plugin's migration, in SQLite's types.
+ * the columns of the plugin's migration, in SQLite's types, without its foreign
+ * keys (there is no order table here); the migration itself ran on Dockware.
  */
 final class RetryDatabase
 {
@@ -19,11 +20,13 @@ final class RetryDatabase
         self::connect($path)->executeStatement(
             'CREATE TABLE ' . RetryStore::TABLE . ' (
                 order_id BLOB PRIMARY KEY NOT NULL,
+                order_version_id BLOB NOT NULL,
                 sales_channel_id BLOB NOT NULL,
                 first_attempt_at INTEGER NOT NULL,
                 later_attempts INTEGER NOT NULL,
                 count_retries INTEGER NOT NULL,
                 next_attempt_at INTEGER NOT NULL,
+                not_after INTEGER NULL,
                 last_error TEXT NULL
             )',
         );

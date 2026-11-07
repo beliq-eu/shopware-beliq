@@ -55,7 +55,13 @@ final class CurlHttpClient implements HttpClient
         $responseBody = curl_exec($handle);
         if ($responseBody === false) {
             $error = curl_error($handle);
-            $kind = self::failureKind(curl_errno($handle), (float) curl_getinfo($handle, CURLINFO_CONNECT_TIME));
+            // libcurl leaves the connect time at 0 until the connection is up, its
+            // TLS handshake included (measured on libcurl 8.14 and 8.22), so a
+            // timeout with no connect time came before the request was sent.
+            $kind = BeliqTransportException::kindForCurlError(
+                curl_errno($handle),
+                (float) curl_getinfo($handle, CURLINFO_CONNECT_TIME) > 0.0,
+            );
             curl_close($handle);
             throw new BeliqTransportException($kind, 'beliq request failed: ' . $error);
         }
@@ -70,21 +76,4 @@ final class CurlHttpClient implements HttpClient
         ];
     }
 
-    /**
-     * Where the request stopped, from libcurl's error number. A timeout (28) is
-     * the connect timeout when no connection was ever made, which libcurl reports
-     * as a connect time of 0, and this client's own total timeout otherwise.
-     *
-     * @return BeliqTransportException::*
-     */
-    private static function failureKind(int $errno, float $connectTime): string
-    {
-        return match ($errno) {
-            CURLE_COULDNT_RESOLVE_PROXY, CURLE_COULDNT_RESOLVE_HOST, CURLE_COULDNT_CONNECT => BeliqTransportException::CONNECT_FAILED,
-            CURLE_OPERATION_TIMEDOUT => $connectTime > 0.0 ? BeliqTransportException::TIMEOUT : BeliqTransportException::CONNECT_TIMEOUT,
-            CURLE_SSL_CONNECT_ERROR, CURLE_SSL_PEER_CERTIFICATE, CURLE_SSL_CERTPROBLEM,
-            CURLE_SSL_CACERT_BADFILE => BeliqTransportException::TLS,
-            default => BeliqTransportException::CONNECTION_LOST,
-        };
-    }
 }

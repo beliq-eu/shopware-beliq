@@ -157,7 +157,9 @@ final class BeliqClient
         if (preg_match('/^\d+$/', $header) === 1) {
             return (int) $header;
         }
-        $date = \DateTimeImmutable::createFromFormat(\DateTimeInterface::RFC7231, $header);
+        // The format's "GMT" is a literal, so the zone is passed: without it the
+        // date would be read in PHP's default time zone.
+        $date = \DateTimeImmutable::createFromFormat(\DateTimeInterface::RFC7231, $header, new \DateTimeZone('UTC'));
         if ($date === false) {
             return null;
         }

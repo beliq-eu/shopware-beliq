@@ -7,9 +7,7 @@ use Beliq\Shopware\Document\BeliqInvoiceRenderer;
 use Beliq\Shopware\Document\InvoiceDocumentLookup;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
-use Beliq\Shopware\Retry\OrderFailureFields;
 use Beliq\Shopware\Tests\Support\FakeHttpClient;
-use Beliq\Shopware\Tests\Support\RecordingRecorder;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
@@ -72,26 +70,6 @@ final class BeliqInvoiceRendererTest extends TestCase
         $sent = json_decode($call['body'], true);
         self::assertSame('zugferd', $sent['standard']);
         self::assertSame('SW10042', $sent['invoice']['number']);
-    }
-
-    /**
-     * A document made by hand from the Documents card after the automatic
-     * attempts gave up must not leave the old failure showing on the order.
-     */
-    public function testAStoredInvoiceClearsAFailureTheOrderShows(): void
-    {
-        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
-        $failed = $this->businessOrder('SW10050');
-        $failed->setCustomFields([OrderFailureFields::FAILURE => 'INVALID_INVOICE (HTTP 422)']);
-        $clean = $this->businessOrder('SW10051');
-
-        $recorder = new RecordingRecorder();
-        foreach ([$failed, $clean] as $order) {
-            $this->renderer($order, $this->config('zugferd', 'xml'), $http, recorder: $recorder)
-                ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
-        }
-
-        self::assertSame([$failed->getId()], $recorder->cleared);
     }
 
     public function testPdfContentTypeYieldsAPdfDocument(): void
@@ -205,7 +183,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame(BeliqInvoiceRenderer::TYPE, $this->renderer($order, $this->config('zugferd', 'xml'), $http)->supports());
     }
 
-    private function renderer(OrderEntity $order, PluginConfigProvider $configProvider, FakeHttpClient $http, int $existingCount = 0, ?RecordingRecorder $recorder = null): BeliqInvoiceRenderer
+    private function renderer(OrderEntity $order, PluginConfigProvider $configProvider, FakeHttpClient $http, int $existingCount = 0): BeliqInvoiceRenderer
     {
         $orderRepository = $this->createMock(EntityRepository::class);
         $orderRepository->method('search')->willReturnCallback(
@@ -225,7 +203,6 @@ final class BeliqInvoiceRendererTest extends TestCase
             new OrderAdapter(),
             new InvoiceMapper(),
             $this->lookup($existingCount),
-            $recorder ?? new RecordingRecorder(),
             $http,
         );
     }
