@@ -102,6 +102,46 @@ The generated document is stored as a beliq e-invoice document on the order (its
 Documents tab), with its file kept as private media. It is downloadable there as
 XML or a hybrid PDF, depending on the format you chose.
 
+## When beliq is unavailable
+
+The order's state change always goes through. When the automatic invoice's
+first attempt fails, the plugin records the failure on the order (Orders, the
+order's Details tab, Custom fields, "beliq e-invoice": when it failed, the beliq
+error code or the connection failure, and when the next attempt is due) and,
+for a failure a wait can help, tries again later. What is retried, and when,
+follows the beliq SDKs (`src/Retry/RetrySchedule.php`):
+
+- An outage a wait can outlast is tried at about 2, 5, 10, 14, 30 and 60
+  minutes after the first attempt, or later when beliq's `Retry-After` asks for
+  longer: a 503 `DATABASE_UNAVAILABLE`, a 502 or 503 without a beliq error code,
+  and a connection that could not be opened.
+- A failure that may have run at beliq is tried at most 3 times, all within the
+  first 15 minutes, a span in which beliq does not charge the same request
+  twice: `ENGINE_UNAVAILABLE` or another coded 502 or 503, a 429 other than
+  `QUOTA_EXCEEDED`, and a connection lost after the request was sent.
+- The first attempt runs inside the state change with a 30 s timeout; when that
+  runs out, the later attempts take over with the 90 s of the SDKs. A later
+  attempt's own timeout is final, since beliq may still be working on the
+  document.
+- Nothing else is retried: a 4xx would send the same order data to the same
+  answer. The failure stays on the order next to the Documents card, where a
+  beliq e-invoice can be created by hand.
+
+The later attempts are rows in the plugin's `beliq_invoice_retry` table, worked
+through by the scheduled task `beliq.invoice_retry` every minute. A shop that
+runs no scheduled-task runner and no message consumer runs it only while
+someone is logged into the Administration (Shopware's admin worker), so run
+`bin/console scheduled-task:run` and `bin/console messenger:consume async` in
+production, as Shopware's own documentation recommends. Each attempt advances
+its row before it calls beliq, so a process killed mid-call leaves the next
+attempt in place, and a claim is a conditional update, so two task runs never
+attempt one order at once. A stored beliq invoice, automatic or by hand, clears
+the failure. The slots and timeouts are beliq's choice, sized from its own
+outages; no standard sets them.
+
+Uninstalling the plugin without keeping its data drops the table and the custom
+field set.
+
 ## Requirements
 
 - Shopware 6.7. 6.6 is not supported: the document renderer targets the 6.7
@@ -118,7 +158,9 @@ composer scrub:check   # fail on em-dash
 shopware-cli extension validate . --store-compliance   # Store check, PHPStan at level 8
 ```
 
-The mapper and client tests run without a Shopware install. A live smoke against
+The mapper and client tests run without a Shopware install. The retry tests use
+a real database (SQLite through DBAL) and, for the HTTP layer, a real local
+server (PHP's built-in one). A live smoke against
 `/v1/generate` and `/v1/validate` is gated on a `BELIQ_API_KEY` environment
 variable.
 

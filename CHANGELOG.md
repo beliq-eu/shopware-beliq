@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- An automatic invoice whose first attempt meets a beliq outage is tried again
+  later. When beliq cannot be reached or answers that it is unavailable, the
+  scheduled task `beliq.invoice_retry` tries again at about 2, 5, 10, 14, 30 and
+  60 minutes, or later when beliq's `Retry-After` asks for it. A failure that may
+  have run at beliq is tried at most 3 times within 15 minutes, and a rejection
+  is not retried. The classes follow the beliq SDKs; see the README's "When beliq
+  is unavailable". The plugin adds the table `beliq_invoice_retry`.
+- Every failure of the automatic invoice shows on the order, in the custom field
+  set "beliq e-invoice" on its Details tab. Before, it went to the log only.
+- A transport failure says where the request stopped (the connection could not
+  be opened, the connect timed out, the request timed out, the connection was
+  lost, TLS), and a beliq error carries the response's `Retry-After`.
+
 ## 0.1.0 (2026-11-05)
 
 - Requires Shopware 6.7 (`shopware/core` `~6.7.0`). The plugin declared `^6.6`
