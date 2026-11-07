@@ -62,6 +62,10 @@ final class OrderFailureFields
             'id' => self::FIELD_IDS[$name],
             'name' => $name,
             'type' => $type,
+            // Shopware's default exposes a custom field to the Store API, which
+            // would show the shop's own failure (a quota running out, say) to the
+            // customer on their order.
+            'storeApiAware' => false,
             'config' => [
                 'label' => ['en-GB' => $en, 'de-DE' => $de],
                 'customFieldPosition' => $position,
