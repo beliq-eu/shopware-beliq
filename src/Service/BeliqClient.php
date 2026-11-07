@@ -141,6 +141,29 @@ final class BeliqClient
             $details = $decoded['error']['details'] ?? null;
         }
 
-        throw new BeliqApiException($message, $code, $res['status'], $details);
+        throw new BeliqApiException($message, $code, $res['status'], $details, self::retryAfterSeconds($res['headers']['retry-after'] ?? null));
+    }
+
+    /**
+     * Retry-After is either delay-seconds or an HTTP-date (RFC 9110, section
+     * 10.2.3). Anything else is ignored rather than guessed at.
+     */
+    private static function retryAfterSeconds(?string $header): ?int
+    {
+        if ($header === null) {
+            return null;
+        }
+        $header = trim($header);
+        if (preg_match('/^\d+$/', $header) === 1) {
+            return (int) $header;
+        }
+        // The format's "GMT" is a literal, so the zone is passed: without it the
+        // date would be read in PHP's default time zone.
+        $date = \DateTimeImmutable::createFromFormat(\DateTimeInterface::RFC7231, $header, new \DateTimeZone('UTC'));
+        if ($date === false) {
+            return null;
+        }
+
+        return max(0, $date->getTimestamp() - time());
     }
 }

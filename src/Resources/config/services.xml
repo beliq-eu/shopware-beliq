@@ -8,7 +8,9 @@
 
         <service id="Beliq\Shopware\Service\OrderAdapter"/>
 
-        <service id="Beliq\Shopware\Service\HttpClient" class="Beliq\Shopware\Service\CurlHttpClient"/>
+        <service id="Beliq\Shopware\Service\AttemptHttpClient"/>
+
+        <service id="Beliq\Shopware\Service\HttpClient" alias="Beliq\Shopware\Service\AttemptHttpClient"/>
 
         <service id="Beliq\Shopware\Config\PluginConfigProvider">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
@@ -28,10 +30,44 @@
             <tag name="document.renderer"/>
         </service>
 
-        <service id="Beliq\Shopware\Subscriber\OrderStateSubscriber">
+        <service id="Beliq\Shopware\Retry\RetryStore">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+        </service>
+
+        <service id="Beliq\Shopware\Retry\DocumentInvoiceGeneration">
             <argument type="service" id="Beliq\Shopware\Config\PluginConfigProvider"/>
             <argument type="service" id="Shopware\Core\Checkout\Document\Service\DocumentGenerator"/>
             <argument type="service" id="Beliq\Shopware\Document\InvoiceDocumentLookup"/>
+            <argument type="service" id="Beliq\Shopware\Service\AttemptHttpClient"/>
+        </service>
+
+        <service id="Beliq\Shopware\Retry\OrderCustomFieldRecorder">
+            <argument type="service" id="order.repository"/>
+        </service>
+
+        <service id="Beliq\Shopware\Retry\InvoiceAttempts">
+            <argument type="service" id="Beliq\Shopware\Retry\RetryStore"/>
+            <argument type="service" id="Beliq\Shopware\Retry\DocumentInvoiceGeneration"/>
+            <argument type="service" id="Beliq\Shopware\Retry\OrderCustomFieldRecorder"/>
+            <argument type="service" id="logger"/>
+            <argument type="service" id="Psr\Clock\ClockInterface"/>
+        </service>
+
+        <service id="Beliq\Shopware\Retry\InvoiceRetryTask">
+            <tag name="shopware.scheduled.task"/>
+        </service>
+
+        <service id="Beliq\Shopware\Retry\InvoiceRetryTaskHandler">
+            <argument type="service" id="scheduled_task.repository"/>
+            <argument type="service" id="logger"/>
+            <argument type="service" id="Beliq\Shopware\Retry\InvoiceAttempts"/>
+            <tag name="messenger.message_handler"/>
+        </service>
+
+        <service id="Beliq\Shopware\Subscriber\OrderStateSubscriber">
+            <argument type="service" id="Beliq\Shopware\Config\PluginConfigProvider"/>
+            <argument type="service" id="Beliq\Shopware\Document\InvoiceDocumentLookup"/>
+            <argument type="service" id="Beliq\Shopware\Retry\InvoiceAttempts"/>
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber"/>
         </service>

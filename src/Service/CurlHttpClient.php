@@ -2,6 +2,8 @@
 
 namespace Beliq\Shopware\Service;
 
+use Beliq\Shopware\Exception\BeliqTransportException;
+
 /** A cURL-backed HttpClient with no framework dependency. */
 final class CurlHttpClient implements HttpClient
 {
@@ -53,8 +55,17 @@ final class CurlHttpClient implements HttpClient
         $responseBody = curl_exec($handle);
         if ($responseBody === false) {
             $error = curl_error($handle);
+            // The request was sent only once TCP was up and, for HTTPS, the TLS
+            // handshake had finished. Some libcurl builds report the TCP connect
+            // time of a handshake that then stalls, so the TLS time is read too.
+            $tlsDone = strtolower((string) curl_getinfo($handle, CURLINFO_SCHEME)) !== 'https'
+                || (float) curl_getinfo($handle, CURLINFO_APPCONNECT_TIME) > 0.0;
+            $kind = BeliqTransportException::kindForCurlError(
+                curl_errno($handle),
+                (float) curl_getinfo($handle, CURLINFO_CONNECT_TIME) > 0.0 && $tlsDone,
+            );
             curl_close($handle);
-            throw new \RuntimeException('beliq request failed: ' . $error);
+            throw new BeliqTransportException($kind, 'beliq request failed: ' . $error);
         }
 
         $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
@@ -66,4 +77,5 @@ final class CurlHttpClient implements HttpClient
             'headers' => $responseHeaders,
         ];
     }
+
 }

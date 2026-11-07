@@ -118,6 +118,38 @@ final class BeliqClientTest extends TestCase
         }
     }
 
+    /** RFC 9110, section 10.2.3: Retry-After is delay-seconds or an HTTP-date. */
+    public function testRetryAfterIsReadInBothOfItsForms(): void
+    {
+        $at = static function (string $header): ?int {
+            $http = new FakeHttpClient([
+                'status' => 503,
+                'body' => '{"success":false,"error":{"code":"DATABASE_UNAVAILABLE","message":"down"}}',
+                'headers' => ['content-type' => 'application/json', 'retry-after' => $header],
+            ]);
+            try {
+                (new BeliqClient('k', 'https://api.beliq.eu', $http))->generate(['invoice' => []]);
+            } catch (BeliqApiException $e) {
+                return $e->retryAfterSeconds;
+            }
+            self::fail('Expected a BeliqApiException.');
+        };
+
+        self::assertSame(30, $at('30'));
+        // The date is in GMT whatever the shop's time zone.
+        $zone = date_default_timezone_get();
+        date_default_timezone_set('Europe/Berlin');
+        try {
+            $date = $at(gmdate('D, d M Y H:i:s', time() + 120) . ' GMT');
+        } finally {
+            date_default_timezone_set($zone);
+        }
+        self::assertNotNull($date);
+        self::assertGreaterThanOrEqual(118, $date);
+        self::assertLessThanOrEqual(120, $date);
+        self::assertNull($at('soon'));
+    }
+
     public function testValidateUnwrapsDataAndBuildsQuery(): void
     {
         $http = new FakeHttpClient([
