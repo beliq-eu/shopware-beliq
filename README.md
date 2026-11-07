@@ -108,8 +108,12 @@ The order's state change always goes through. When the automatic invoice's
 first attempt fails, the plugin records the failure on the order (Orders, the
 order's Details tab, Custom fields, "beliq e-invoice": when it failed, the beliq
 error code or the connection failure, and when the next attempt is due) and,
-for a failure a wait can help, tries again later. What is retried, and when,
-follows the beliq SDKs (`src/Retry/RetrySchedule.php`):
+for a failure a wait can help, tries again later. What is retried, and when
+(`src/Retry/RetrySchedule.php`), follows the beliq SDKs (`@beliq/sdk` 0.7.1,
+`beliq` 0.7.0) with two departures: the first attempt's own timeout is retried
+as a request that may have run (the SDKs never retry their own timeout, but the
+order request's 30 s can be shorter than beliq's own deadlines), and a TLS
+failure is never retried (the Node SDK retries it by count):
 
 - An outage a wait can outlast is tried at about 2, 5, 10, 14, 30 and 60
   minutes after the first attempt, or later when beliq's `Retry-After` asks for
@@ -136,8 +140,8 @@ follows the beliq SDKs (`src/Retry/RetrySchedule.php`):
   attempt past the 60-minute slot ends the retries.
 - Nothing else is retried: a 4xx would send the same order data to the same
   answer, and a TLS failure or a malformed base URL is not fixed by waiting. The
-  failure stays on the order next to the Documents card, where a beliq
-  e-invoice can be created by hand.
+  failure stays in the order's custom fields, and a beliq e-invoice can be
+  created by hand from the order's Documents tab.
 
 The later attempts are rows in the plugin's `beliq_invoice_retry` table, worked
 through by the scheduled task `beliq.invoice_retry` every minute. A shop that
@@ -148,10 +152,12 @@ production, as Shopware's own documentation recommends. Each attempt advances
 its row before it calls beliq, so a process killed mid-call leaves the next
 attempt in place, and a claim is a conditional update, so two task runs never
 attempt one order at once. A later attempt that stores the invoice clears the
-failure; an invoice created by hand keeps the record of the last automatic
-failure, and ends any pending attempt (automatic generation never overwrites).
-A deleted order takes its row with it. The slots and timeouts are beliq's choice, sized from its own
-outages; no standard sets them.
+failure. An invoice created by hand while an attempt is pending ends it: that
+attempt finds the invoice, makes none (automatic generation never overwrites)
+and clears the failure. An invoice created by hand after the last attempt
+leaves the record of the last automatic failure. A deleted order takes its row
+with it. The slots and timeouts are beliq's choice, sized from its own outages;
+no standard sets them.
 
 Uninstalling the plugin without keeping its data drops the table and the custom
 field set.

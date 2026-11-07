@@ -11,8 +11,9 @@
   rejection is not retried. A `Retry-After` beyond the 60-minute slot ends the
   retries. An outage failure that follows one that may have run still gets the
   30 and 60-minute slots, which can cost one more unit if the earlier request
-  was charged and its answer lost. The classes follow the beliq SDKs; see the README's "When beliq
-  is unavailable". The plugin adds the table `beliq_invoice_retry`, whose rows
+  was charged and its answer lost. The classes follow the beliq SDKs with two
+  departures, the first attempt's own timeout and TLS failures; see the README's
+  "When beliq is unavailable". The plugin adds the table `beliq_invoice_retry`, whose rows
   go with their order or sales channel when it is deleted.
 - Every failure of the automatic invoice shows on the order, in the custom field
   set "beliq e-invoice" on its Details tab. Before, it went to the log only.
