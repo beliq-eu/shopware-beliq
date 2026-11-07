@@ -5,7 +5,16 @@ namespace Beliq\Shopware\Tests;
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
 use Beliq\Shopware\Document\InvoiceDocumentLookup;
+use Beliq\Shopware\Exception\BeliqApiException;
+use Beliq\Shopware\Retry\DocumentInvoiceGeneration;
+use Beliq\Shopware\Retry\InvoiceAttempts;
+use Beliq\Shopware\Retry\RetryStore;
+use Beliq\Shopware\Service\AttemptHttpClient;
 use Beliq\Shopware\Subscriber\OrderStateSubscriber;
+use Beliq\Shopware\Tests\Support\FakeHttpClient;
+use Beliq\Shopware\Tests\Support\RecordingRecorder;
+use Beliq\Shopware\Tests\Support\RetryDatabase;
+use Beliq\Shopware\Tests\Support\TestClock;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Shopware\Core\Checkout\Document\DocumentGenerationResult;
@@ -24,12 +33,29 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * The subscriber delegates document generation to DocumentGenerator, which runs
  * BeliqInvoiceRenderer and persists the result as a first-class order document.
  * These tests assert the delegation contract: the right document type, an
- * operation carrying the configured file type, the enabled / trigger gates, and
- * the never-break-checkout behaviour (a generation error is swallowed and logged).
+ * operation carrying the configured file type, the enabled / trigger gates, the
+ * never-break-checkout behaviour (a generation error is swallowed), and what a
+ * failure leaves behind: a later attempt for an outage, and a note on the order
+ * either way. The retry store is a real database (SQLite).
  */
 final class OrderStateSubscriberTest extends TestCase
 {
     private const TRIGGER = 'state_enter.order_transaction.state.paid';
+
+    private string $dbFile;
+
+    private RecordingRecorder $recorder;
+
+    protected function setUp(): void
+    {
+        $this->dbFile = RetryDatabase::create();
+        $this->recorder = new RecordingRecorder();
+    }
+
+    protected function tearDown(): void
+    {
+        RetryDatabase::remove($this->dbFile);
+    }
 
     public function testGeneratesBeliqDocumentOnTheConfiguredTrigger(): void
     {
@@ -124,6 +150,48 @@ final class OrderStateSubscriberTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
+    /**
+     * The problem check. Before the later invoice, an outage at the moment of
+     * payment was logged and nothing else happened: no invoice, ever, and nothing
+     * on the order.
+     */
+    public function testAnOutageAtPaymentLeavesALaterAttemptAndShowsOnTheOrder(): void
+    {
+        $order = $this->order();
+        $result = new DocumentGenerationResult();
+        $result->addError($order->getId(), new BeliqApiException('down', 'DATABASE_UNAVAILABLE', 503, null, 30));
+        $generator = $this->createMock(DocumentGenerator::class);
+        $generator->method('generate')->willReturn($result);
+
+        $this->subscriber($generator)->onOrderState(
+            new OrderStateMachineStateChangeEvent(self::TRIGGER, $order, Context::createDefaultContext()),
+        );
+
+        $pending = (new RetryStore(RetryDatabase::connect($this->dbFile)))->find($order->getId());
+        self::assertNotNull($pending);
+        self::assertSame(0, $pending->laterAttempts);
+        self::assertCount(1, $this->recorder->failures);
+        self::assertSame('DATABASE_UNAVAILABLE (HTTP 503)', $this->recorder->failures[0]['description']);
+        self::assertSame($pending->nextAttemptAt, $this->recorder->failures[0]['nextAttemptAt']);
+    }
+
+    public function testARejectedInvoiceShowsOnTheOrderWithNoLaterAttempt(): void
+    {
+        $order = $this->order();
+        $result = new DocumentGenerationResult();
+        $result->addError($order->getId(), new BeliqApiException('invalid', 'INVALID_INVOICE', 422));
+        $generator = $this->createMock(DocumentGenerator::class);
+        $generator->method('generate')->willReturn($result);
+
+        $this->subscriber($generator)->onOrderState(
+            new OrderStateMachineStateChangeEvent(self::TRIGGER, $order, Context::createDefaultContext()),
+        );
+
+        self::assertNull((new RetryStore(RetryDatabase::connect($this->dbFile)))->find($order->getId()));
+        self::assertSame('INVALID_INVOICE (HTTP 422)', $this->recorder->failures[0]['description']);
+        self::assertNull($this->recorder->failures[0]['nextAttemptAt']);
+    }
+
     private function order(): OrderEntity
     {
         $order = new OrderEntity();
@@ -136,10 +204,20 @@ final class OrderStateSubscriberTest extends TestCase
 
     private function subscriber(DocumentGenerator $generator, bool $enabled = true, string $apiKey = 'blq_test', int $existingCount = 0): OrderStateSubscriber
     {
+        $config = $this->configProvider($enabled, $apiKey);
+        $lookup = $this->lookup($existingCount);
+        $unused = new FakeHttpClient(['status' => 500, 'body' => '', 'headers' => []]);
+
         return new OrderStateSubscriber(
-            $this->configProvider($enabled, $apiKey),
-            $generator,
-            $this->lookup($existingCount),
+            $config,
+            $lookup,
+            new InvoiceAttempts(
+                new RetryStore(RetryDatabase::connect($this->dbFile)),
+                new DocumentInvoiceGeneration($config, $generator, $lookup, new AttemptHttpClient($unused, $unused)),
+                $this->recorder,
+                new NullLogger(),
+                new TestClock(1_800_000_000),
+            ),
             new NullLogger(),
         );
     }

@@ -2,7 +2,11 @@
 
 namespace Beliq\Shopware\Tests;
 
+use Beliq\Shopware\Exception\BeliqApiException;
+use Beliq\Shopware\Exception\BeliqTransportException;
+use Beliq\Shopware\Service\BeliqClient;
 use Beliq\Shopware\Service\CurlHttpClient;
+use Beliq\Shopware\Tests\Support\StubServer;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -84,6 +88,73 @@ final class CurlHttpClientTest extends TestCase
 
         $capped = $this->timeRequest(new CurlHttpClient(self::TOTAL_TIMEOUT, self::CONNECT_TIMEOUT));
         self::assertLessThan(self::TOTAL_TIMEOUT - 1.0, $capped);
+    }
+
+    public function testAStalledConnectIsAConnectTimeout(): void
+    {
+        self::assertSame(
+            BeliqTransportException::CONNECT_TIMEOUT,
+            $this->failureKind(new CurlHttpClient(self::TOTAL_TIMEOUT, self::CONNECT_TIMEOUT), $this->blackHole),
+        );
+    }
+
+    public function testARefusedConnectionIsAConnectFailure(): void
+    {
+        $closedPort = 'http://127.0.0.1:' . StubServer::freePort() . '/';
+
+        self::assertSame(
+            BeliqTransportException::CONNECT_FAILED,
+            $this->failureKind(new CurlHttpClient(self::TOTAL_TIMEOUT, self::CONNECT_TIMEOUT), $closedPort),
+        );
+    }
+
+    public function testAServerThatAcceptsAndNeverAnswersIsTheRequestsOwnTimeout(): void
+    {
+        // A listening socket with room in its backlog completes the handshake in
+        // the kernel, so the request is sent and then waits for an answer.
+        $silent = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertNotFalse($silent);
+        $url = 'http://' . stream_socket_get_name($silent, false) . '/';
+
+        try {
+            self::assertSame(
+                BeliqTransportException::TIMEOUT,
+                $this->failureKind(new CurlHttpClient(2, self::CONNECT_TIMEOUT), $url),
+            );
+        } finally {
+            fclose($silent);
+        }
+    }
+
+    public function testA503CarriesItsRetryAfterThroughTheClient(): void
+    {
+        $server = new StubServer([[
+            'status' => 503,
+            'headers' => ['Content-Type' => 'application/json', 'Retry-After' => '30'],
+            'body' => '{"success":false,"error":{"code":"DATABASE_UNAVAILABLE","message":"The database is unavailable."}}',
+        ]]);
+
+        try {
+            (new BeliqClient('blq_test', $server->baseUrl, new CurlHttpClient(self::TOTAL_TIMEOUT, self::CONNECT_TIMEOUT)))
+                ->generate(['standard' => 'xrechnung', 'invoice' => []]);
+            self::fail('Expected the 503 to throw.');
+        } catch (BeliqApiException $exception) {
+            self::assertSame('DATABASE_UNAVAILABLE', $exception->apiCode);
+            self::assertSame(503, $exception->status);
+            self::assertSame(30, $exception->retryAfterSeconds);
+        } finally {
+            $server->stop();
+        }
+    }
+
+    private function failureKind(CurlHttpClient $client, string $url): string
+    {
+        try {
+            $client->request('GET', $url);
+        } catch (BeliqTransportException $exception) {
+            return $exception->kind;
+        }
+        self::fail('Expected a transport failure from ' . $url);
     }
 
     private function timeRequest(CurlHttpClient $client): float
