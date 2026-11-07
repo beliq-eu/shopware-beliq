@@ -1,7 +1,7 @@
 {
   "name": "beliq/shopware-beliq",
   "description": "Generate compliant EN 16931 e-invoices from Shopware orders through the beliq API.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "shopware-platform-plugin",
   "license": "MIT",
   "authors": [

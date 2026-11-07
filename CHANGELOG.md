@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-07)
 
 - An automatic invoice whose first attempt meets a beliq outage is tried again
   later. When beliq cannot be reached or answers that it is unavailable, the

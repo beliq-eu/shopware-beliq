@@ -7,9 +7,9 @@ and tax-authority reporting stay with your access point.
 
 ## Status
 
-Version 0.1.0 is on Packagist as
+Version 0.2.0 is on Packagist as
 [`beliq/shopware-beliq`](https://packagist.org/packages/beliq/shopware-beliq),
-built from the tag `v0.1.0`. It is not in the Shopware Store.
+built from the tag `v0.2.0`. It is not in the Shopware Store.
 
 Built and unit tested:
 
