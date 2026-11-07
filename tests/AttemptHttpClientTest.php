@@ -53,8 +53,8 @@ final class AttemptHttpClientTest extends TestCase
         });
         $generation = new DocumentInvoiceGeneration($this->config(), $generator, $this->noDocuments(), $client);
 
-        self::assertTrue($generation->generate(Uuid::randomHex(), Uuid::randomHex(), false, Context::createDefaultContext()));
-        self::assertTrue($generation->generate(Uuid::randomHex(), Uuid::randomHex(), true, Context::createDefaultContext()));
+        $generation->generate(Uuid::randomHex(), Uuid::randomHex(), false, Context::createDefaultContext());
+        $generation->generate(Uuid::randomHex(), Uuid::randomHex(), true, Context::createDefaultContext());
 
         self::assertCount(1, $orderRequest->calls);
         self::assertCount(1, $later->calls);

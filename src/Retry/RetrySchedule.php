@@ -48,11 +48,11 @@ final class RetrySchedule
     public const LATER_ATTEMPT_TIMEOUT_SECONDS = 90;
 
     /**
-     * How long a claimed attempt keeps its order from being claimed again. Longer
-     * than an attempt can take, so two task runs never call beliq for one order
-     * at once.
+     * How long a claimed attempt keeps its order from being claimed again. Well
+     * past what an attempt takes (its 90 s timeout and the document write), so
+     * two runs never call beliq for one order at once.
      */
-    public const ATTEMPT_LEASE_SECONDS = 120;
+    public const ATTEMPT_LEASE_SECONDS = 300;
 
     // beliq error codes, as the API's error list names them (openapi.json).
     private const QUOTA_EXHAUSTED_CODE = 'QUOTA_EXCEEDED';

@@ -126,6 +126,11 @@ follows the beliq SDKs (`src/Retry/RetrySchedule.php`):
 - The first attempt runs inside the state change with a 30 s timeout; the later
   attempts have the 90 s of the SDKs. A later attempt's own timeout is final,
   since beliq may still be working on the document.
+- An outage failure after one that may have run (a lost connection, then a
+  refused one, say) still gets the 30 and 60-minute slots. If the earlier
+  request was charged and its answer lost, an attempt past 15 minutes that
+  succeeds is charged again: one more unit, for an invoice that would otherwise
+  not be made.
 - A slot that passed while beliq asked for a longer wait, or while no task ran,
   is skipped rather than run straight after. A `Retry-After` that would push an
   attempt past the 60-minute slot ends the retries.

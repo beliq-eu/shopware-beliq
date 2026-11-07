@@ -49,6 +49,7 @@ final class DocumentInvoiceGeneration implements InvoiceGeneration
             throw $error;
         }
 
-        return true;
+        // False when the business-only setting skipped the order.
+        return $this->documents->countForOrder($orderId, $context) > 0;
     }
 }

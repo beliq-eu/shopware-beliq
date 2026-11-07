@@ -8,10 +8,10 @@ use Shopware\Core\Framework\Context;
 interface InvoiceGeneration
 {
     /**
-     * Throws the failure when the attempt failed. Returns false when the plugin
-     * is off for the order's sales channel, so no attempt was made, and true
-     * otherwise: the invoice is stored, the order already had one, or the
-     * business-only setting skips the order.
+     * Throws the failure when the attempt failed. Returns true when the order
+     * has a beliq invoice after the attempt (stored now, or before it), and false
+     * when it has none and nothing failed: the plugin is off for the order's
+     * sales channel, or the business-only setting skips the order.
      */
     public function generate(string $orderId, string $salesChannelId, bool $laterAttempt, Context $context): bool;
 }
