@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.1 (2026-11-12)
+
+- The shipping line takes the order's shipping method name, in the language the
+  order was placed in, where it read `Shipping` on every order. The order is
+  loaded with its own language first, as Shopware's own invoice does. An order
+  with shipping costs whose deliveries name no shipping method, or name
+  different ones, gets no invoice and its failure names the missing value: every
+  line needs an item name (BT-153, BR-25) and no specification prescribes one
+  for shipping, so the plugin does not make one up.
+- German admin texts: the German labels are written with umlauts and ß, every
+  help text and the labels that had none have a German version, and the
+  German Store description is written with umlauts.
+- The IBAN help text said that without payment fields XRechnung needs the bank
+  details another way. Without an IBAN the invoice carries no payment
+  instructions (BG-16), which XRechnung requires (BR-DE-1); the text now says
+  so. The payment means help text named only the SEPA credit transfer under
+  BR-DE-23-a; the rule binds both offered codes, 58 and 30.
+
 ## 0.2.0 (2026-11-07)
 
 - An automatic invoice whose first attempt meets a beliq outage is tried again

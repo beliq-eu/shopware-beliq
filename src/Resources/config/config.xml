@@ -8,14 +8,15 @@
         <input-field type="password">
             <name>apiKey</name>
             <label>API key</label>
-            <label lang="de-DE">API-Schluessel</label>
+            <label lang="de-DE">API-Schlüssel</label>
             <helpText>Your beliq API key. The free tier is enough to evaluate the plugin.</helpText>
+            <helpText lang="de-DE">Ihr beliq-API-Schlüssel. Der kostenlose Tarif reicht, um das Plugin zu testen.</helpText>
         </input-field>
     </card>
 
     <card>
         <title>Seller details</title>
-        <title lang="de-DE">Verkaeuferangaben</title>
+        <title lang="de-DE">Verkäuferangaben</title>
         <input-field type="text">
             <name>sellerName</name>
             <label>Legal name</label>
@@ -39,24 +40,28 @@
         <input-field type="text">
             <name>sellerEmail</name>
             <label>Contact e-mail</label>
-            <helpText>Also used as the seller electronic address (BT-34). XRechnung requires it (BR-DE-7).</helpText>
+            <label lang="de-DE">Kontakt-E-Mail</label>
+            <helpText>The seller contact e-mail (BT-43), which XRechnung requires (BR-DE-7). Also used as the seller electronic address (BT-34).</helpText>
+            <helpText lang="de-DE">E-Mail-Adresse des Verkäuferkontakts (BT-43), die XRechnung verlangt (BR-DE-7). Sie dient auch als elektronische Adresse des Verkäufers (BT-34).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerContactName</name>
             <label>Contact person</label>
             <label lang="de-DE">Ansprechpartner</label>
             <helpText>Seller contact name (BG-6 / BT-41). Required by XRechnung (BR-DE-5).</helpText>
+            <helpText lang="de-DE">Kontaktstelle des Verkäufers (BG-6 / BT-41). XRechnung verlangt sie (BR-DE-5).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerPhone</name>
             <label>Contact phone</label>
             <label lang="de-DE">Telefon</label>
             <helpText>Seller contact telephone (BT-42). Required by XRechnung (BR-DE-6).</helpText>
+            <helpText lang="de-DE">Telefonnummer des Verkäuferkontakts (BT-42). XRechnung verlangt sie (BR-DE-6).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerStreet</name>
             <label>Street and number</label>
-            <label lang="de-DE">Strasse und Hausnummer</label>
+            <label lang="de-DE">Straße und Hausnummer</label>
         </input-field>
         <input-field type="text">
             <name>sellerPostalCode</name>
@@ -71,7 +76,7 @@
         <input-field type="text">
             <name>sellerCountryCode</name>
             <label>Country code (2 letters)</label>
-            <label lang="de-DE">Laendercode (2 Buchstaben)</label>
+            <label lang="de-DE">Ländercode (2 Buchstaben)</label>
             <placeholder>DE</placeholder>
         </input-field>
     </card>
@@ -83,29 +88,33 @@
             <name>paymentMeansCode</name>
             <label>Payment means</label>
             <label lang="de-DE">Zahlungsart</label>
-            <helpText>How the buyer pays (BG-16). An IBAN is required for either option; XRechnung rejects a SEPA credit transfer without one (BR-DE-23-a).</helpText>
+            <helpText>How the buyer pays (BG-16). Both options are credit transfers (codes 58 and 30), for which XRechnung requires the credit transfer details (BG-17, BR-DE-23-a). The plugin sends the payment details only together with an IBAN.</helpText>
+            <helpText lang="de-DE">Wie der Käufer zahlt (BG-16). Beide Optionen sind Überweisungen (Schlüssel 58 und 30), für die XRechnung die Angaben zur Überweisung verlangt (BG-17, BR-DE-23-a). Das Plugin übermittelt die Zahlungsangaben nur zusammen mit einer IBAN.</helpText>
             <defaultValue>58</defaultValue>
             <options>
                 <option>
                     <id>58</id>
                     <name>SEPA credit transfer</name>
-                    <name lang="de-DE">SEPA-Ueberweisung</name>
+                    <name lang="de-DE">SEPA-Überweisung</name>
                 </option>
                 <option>
                     <id>30</id>
                     <name>Credit transfer</name>
-                    <name lang="de-DE">Ueberweisung</name>
+                    <name lang="de-DE">Überweisung</name>
                 </option>
             </options>
         </input-field>
         <input-field type="text">
             <name>sellerIban</name>
             <label>IBAN</label>
-            <helpText>The account the buyer pays into. Leave the payment fields empty to omit payment details; XRechnung then needs the buyer to have the bank details another way.</helpText>
+            <label lang="de-DE">IBAN</label>
+            <helpText>The account the buyer pays into. Without an IBAN the invoice carries no payment instructions (BG-16), which XRechnung requires (BR-DE-1). Leave it empty only if you generate no XRechnung.</helpText>
+            <helpText lang="de-DE">Das Konto, auf das der Käufer zahlt. Ohne IBAN enthält die Rechnung keine Zahlungsanweisungen (BG-16), die XRechnung verlangt (BR-DE-1). Lassen Sie das Feld nur leer, wenn Sie keine XRechnung erzeugen.</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerBic</name>
             <label>BIC</label>
+            <label lang="de-DE">BIC</label>
         </input-field>
         <input-field type="text">
             <name>sellerBankName</name>
@@ -150,6 +159,7 @@
         <input-field type="single-select">
             <name>profile</name>
             <label>Profile</label>
+            <label lang="de-DE">Profil</label>
             <defaultValue>en16931</defaultValue>
             <options>
                 <option>
@@ -169,23 +179,27 @@
         <input-field type="single-select">
             <name>output</name>
             <label>Output</label>
+            <label lang="de-DE">Ausgabe</label>
             <defaultValue>pdf</defaultValue>
             <options>
                 <option>
                     <id>pdf</id>
                     <name>PDF (hybrid, where the format supports it)</name>
+                    <name lang="de-DE">PDF (hybrid, wo das Format es unterstützt)</name>
                 </option>
                 <option>
                     <id>xml</id>
                     <name>XML only</name>
+                    <name lang="de-DE">Nur XML</name>
                 </option>
             </options>
         </input-field>
         <input-field type="bool">
             <name>businessOnly</name>
             <label>Only for business orders</label>
-            <label lang="de-DE">Nur fuer Geschaeftskunden</label>
+            <label lang="de-DE">Nur für Geschäftskunden</label>
             <helpText>Generate only when the buyer looks like a business (VAT ID, company, or business account). Turn off to generate for every order.</helpText>
+            <helpText lang="de-DE">Nur erzeugen, wenn der Käufer als Unternehmen erkennbar ist (USt-IdNr., Firma oder Geschäftskundenkonto). Ausschalten, um für jede Bestellung zu erzeugen.</helpText>
             <defaultValue>true</defaultValue>
         </input-field>
         <input-field type="single-select">
@@ -197,18 +211,21 @@
                 <option>
                     <id>state_enter.order_transaction.state.paid</id>
                     <name>Payment is marked paid</name>
+                    <name lang="de-DE">Zahlung ist als bezahlt markiert</name>
                 </option>
                 <option>
                     <id>state_enter.order.state.completed</id>
                     <name>Order is completed</name>
+                    <name lang="de-DE">Bestellung ist abgeschlossen</name>
                 </option>
             </options>
         </input-field>
         <input-field type="single-select">
             <name>zeroRateCategory</name>
             <label>VAT category for 0% lines</label>
-            <label lang="de-DE">USt-Kategorie fuer 0%-Positionen</label>
+            <label lang="de-DE">USt-Kategorie für 0-%-Positionen</label>
             <helpText>The tax treatment for zero-rated lines is the merchant's call. Reverse charge and intra-community supply are not auto-detected.</helpText>
+            <helpText lang="de-DE">Wie Positionen mit 0 % steuerlich behandelt werden, entscheidet der Händler. Umkehr der Steuerschuld (Reverse Charge) und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
             <defaultValue>Z</defaultValue>
             <options>
                 <option>

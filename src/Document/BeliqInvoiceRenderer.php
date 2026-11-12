@@ -118,17 +118,36 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
     /**
      * The order carried on the state-change event has only a shallow association
      * set. The adapter reads the billing address (with its country), the line
-     * items, the customer account type, and the currency, so the order is reloaded
-     * with those associations before mapping.
+     * items, the customer account type, the currency and the deliveries' shipping
+     * method, so the order is reloaded with those associations before mapping.
+     *
+     * The reload puts the order's language first in the Context's language chain,
+     * as Shopware's own InvoiceRenderer does, so the shipping method's name comes
+     * out in the language the order was placed in. The caller's Context is left
+     * as it is.
      */
     private function loadOrder(string $orderId, Context $context): ?OrderEntity
     {
+        $order = $this->orderRepository->search(new Criteria([$orderId]), $context)->getEntities()->first();
+        if (!$order instanceof OrderEntity) {
+            return null;
+        }
+
+        $orderContext = clone $context;
+        $orderContext->assign([
+            'languageIdChain' => array_values(array_unique(array_filter([
+                $order->getLanguageId(),
+                ...$context->getLanguageIdChain(),
+            ]))),
+        ]);
+
         $criteria = new Criteria([$orderId]);
         $criteria->addAssociation('lineItems');
         $criteria->addAssociation('billingAddress.country');
         $criteria->addAssociation('orderCustomer.customer');
         $criteria->addAssociation('currency');
+        $criteria->addAssociation('deliveries.shippingMethod');
 
-        return $this->orderRepository->search($criteria, $context)->getEntities()->first();
+        return $this->orderRepository->search($criteria, $orderContext)->getEntities()->first();
     }
 }

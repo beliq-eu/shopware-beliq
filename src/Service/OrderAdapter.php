@@ -3,6 +3,7 @@
 namespace Beliq\Shopware\Service;
 
 use Beliq\Shopware\Config\PluginConfig;
+use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Invoice\Address;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\SourceLine;
@@ -23,6 +24,9 @@ use Shopware\Core\Checkout\Order\OrderEntity;
  *
  * Shopware keeps shipping on the order rather than among its line items, so it is
  * added as its own line; without it the invoice understates what the customer paid.
+ * The line is named by the order's shipping method, in the language the order was
+ * loaded in. The method's current name is read, so a method renamed after the
+ * order gives the new name on a later attempt or a regenerate.
  *
  * Line figures are converted to the net basis EN 16931 works in: Shopware reports
  * order figures in the order's tax status (gross, net, or tax-free), so a gross
@@ -37,8 +41,6 @@ final class OrderAdapter
      */
     private const BUYER_REFERENCE_FIELD = 'beliq_buyer_reference';
 
-    private const SHIPPING_DESCRIPTION = 'Shipping';
-
     public function toSourceOrder(OrderEntity $order, PluginConfig $config): SourceOrder
     {
         $taxStatus = $order->getTaxStatus() ?? $order->getPrice()->getTaxStatus();
@@ -52,7 +54,7 @@ final class OrderAdapter
             }
             $lines[] = $this->toSourceLine($item, $taxStatus);
         }
-        foreach ($this->shippingLines($order->getShippingCosts(), $taxStatus) as $line) {
+        foreach ($this->shippingLines($order, $taxStatus) as $line) {
             $lines[] = $line;
         }
 
@@ -154,16 +156,19 @@ final class OrderAdapter
      *
      * @return list<SourceLine>
      */
-    private function shippingLines(CalculatedPrice $shipping, string $taxStatus): array
+    private function shippingLines(OrderEntity $order, string $taxStatus): array
     {
+        $shipping = $order->getShippingCosts();
         $total = $shipping->getTotalPrice();
         if ($total === 0.0) {
             return [];
         }
 
+        $name = $this->shippingMethodName($order);
+
         $taxes = $shipping->getCalculatedTaxes();
         if ($taxStatus === CartPrice::TAX_STATE_FREE || $taxes->count() === 0) {
-            return [$this->shippingLine($total, 0.0)];
+            return [$this->shippingLine($name, $total, 0.0)];
         }
 
         $lines = [];
@@ -173,16 +178,44 @@ final class OrderAdapter
             $net = $taxStatus === CartPrice::TAX_STATE_GROSS
                 ? $tax->getPrice() - $tax->getTax()
                 : $tax->getPrice();
-            $lines[] = $this->shippingLine($net, $tax->getTaxRate());
+            $lines[] = $this->shippingLine($name, $net, $tax->getTaxRate());
         }
 
         return $lines;
     }
 
-    private function shippingLine(float $net, float $rate): SourceLine
+    /**
+     * The name of the shipping method the order's shipping costs belong to. Every
+     * invoice line needs an item name (BT-153, rule BR-25 of EN 16931), and no
+     * specification prescribes one for shipping, so the name is the shop's own or
+     * there is no invoice: an order whose deliveries name no method, or name
+     * different ones, stops here rather than carrying a made-up name.
+     */
+    private function shippingMethodName(OrderEntity $order): string
+    {
+        $names = [];
+        foreach ($order->getDeliveries() ?? [] as $delivery) {
+            $name = $delivery->getShippingMethod()?->getTranslation('name');
+            if (!is_string($name) || trim($name) === '') {
+                throw MissingOrderDataException::shippingMethodName($order->getOrderNumber() ?? '');
+            }
+            $names[trim($name)] = true;
+        }
+
+        if ($names === []) {
+            throw MissingOrderDataException::shippingMethodName($order->getOrderNumber() ?? '');
+        }
+        if (count($names) > 1) {
+            throw MissingOrderDataException::severalShippingMethods($order->getOrderNumber() ?? '', array_keys($names));
+        }
+
+        return (string) array_key_first($names);
+    }
+
+    private function shippingLine(string $name, float $net, float $rate): SourceLine
     {
         return new SourceLine(
-            description: self::SHIPPING_DESCRIPTION,
+            description: $name,
             quantity: 1.0,
             unitNetPrice: $net,
             lineNetTotal: $net,

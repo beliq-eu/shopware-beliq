@@ -18,11 +18,15 @@ use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Document\Renderer\DocumentRendererConfig;
 use Shopware\Core\Checkout\Order\Aggregate\OrderAddress\OrderAddressEntity;
+use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryCollection;
+use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderCustomer\OrderCustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemCollection;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
+use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -175,6 +179,63 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertNotNull($result->getOrderError($order->getId()));
     }
 
+    /**
+     * The shipping line takes the name of the order's shipping method in the
+     * order's language, as Shopware's own invoice does. The fake repository
+     * resolves a translated field along the Context's language chain the way the
+     * DAL does, so the name only comes out German when the order is loaded with
+     * the order's language first in that chain.
+     */
+    public function testShippingLineTakesTheMethodNameInTheOrdersLanguage(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $german = Uuid::randomHex();
+        $order = $this->businessOrder('SW10048');
+        $order->setLanguageId($german);
+        $order->setShippingCosts(new CalculatedPrice(
+            4.95,
+            4.95,
+            new CalculatedTaxCollection([new CalculatedTax(0.79, 19.0, 4.95)]),
+            new TaxRuleCollection(),
+        ));
+        $repository = $this->translatingRepository($order, [
+            Defaults::LANGUAGE_SYSTEM => 'Standard shipping',
+            $german => 'Standardversand',
+        ]);
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, orderRepository: $repository)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderError($order->getId()));
+        $lines = json_decode($http->lastCall()['body'], true)['invoice']['lines'];
+        self::assertSame('Standardversand', $lines[1]['description']);
+    }
+
+    /**
+     * An order whose shipping method name cannot be read gets no invoice: the
+     * line's name (BT-153) has no value the shop holds, and none is made up.
+     */
+    public function testShippingWithoutAMethodNameIsARenderErrorWithoutCallingTheApi(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->businessOrder('SW10049');
+        $order->setShippingCosts(new CalculatedPrice(
+            4.95,
+            4.95,
+            new CalculatedTaxCollection([new CalculatedTax(0.79, 19.0, 4.95)]),
+            new TaxRuleCollection(),
+        ));
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        $error = $result->getOrderError($order->getId());
+        self::assertNotNull($error);
+        self::assertStringContainsString('shipping method', $error->getMessage());
+        self::assertSame([], $http->calls);
+    }
+
     public function testSupportsIsTheBeliqDocumentType(): void
     {
         $http = new FakeHttpClient(['status' => 200, 'body' => '', 'headers' => []]);
@@ -183,19 +244,29 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame(BeliqInvoiceRenderer::TYPE, $this->renderer($order, $this->config('zugferd', 'xml'), $http)->supports());
     }
 
-    private function renderer(OrderEntity $order, PluginConfigProvider $configProvider, FakeHttpClient $http, int $existingCount = 0): BeliqInvoiceRenderer
-    {
-        $orderRepository = $this->createMock(EntityRepository::class);
-        $orderRepository->method('search')->willReturnCallback(
-            fn (Criteria $criteria, Context $context): EntitySearchResult => new EntitySearchResult(
-                'order',
-                1,
-                new OrderCollection([$order]),
-                null,
-                $criteria,
-                $context,
-            ),
-        );
+    /**
+     * @param EntityRepository<OrderCollection>|null $orderRepository
+     */
+    private function renderer(
+        OrderEntity $order,
+        PluginConfigProvider $configProvider,
+        FakeHttpClient $http,
+        int $existingCount = 0,
+        ?EntityRepository $orderRepository = null,
+    ): BeliqInvoiceRenderer {
+        if ($orderRepository === null) {
+            $orderRepository = $this->createMock(EntityRepository::class);
+            $orderRepository->method('search')->willReturnCallback(
+                fn (Criteria $criteria, Context $context): EntitySearchResult => new EntitySearchResult(
+                    'order',
+                    1,
+                    new OrderCollection([$order]),
+                    null,
+                    $criteria,
+                    $context,
+                ),
+            );
+        }
 
         return new BeliqInvoiceRenderer(
             $orderRepository,
@@ -205,6 +276,57 @@ final class BeliqInvoiceRendererTest extends TestCase
             $this->lookup($existingCount),
             $http,
         );
+    }
+
+    /**
+     * An order repository that loads the order's delivery and its shipping method
+     * only when the Criteria asks for `deliveries.shippingMethod`, and fills the
+     * method's name the way the DAL's EntityHydrator does: `translated` holds the
+     * first value along the Context's language chain, and the plain field holds
+     * the value of the chain's first language or null.
+     *
+     * @param array<string, string> $nameByLanguage
+     *
+     * @return EntityRepository<OrderCollection>
+     */
+    private function translatingRepository(OrderEntity $order, array $nameByLanguage): EntityRepository
+    {
+        $repository = $this->createMock(EntityRepository::class);
+        $repository->method('search')->willReturnCallback(
+            static function (Criteria $criteria, Context $context) use ($order, $nameByLanguage): EntitySearchResult {
+                $loaded = clone $order;
+                $deliveries = $criteria->hasAssociation('deliveries')
+                    ? $criteria->getAssociation('deliveries')
+                    : null;
+                if ($deliveries !== null && $deliveries->hasAssociation('shippingMethod')) {
+                    $chain = $context->getLanguageIdChain();
+                    $translated = null;
+                    foreach ($chain as $languageId) {
+                        if (isset($nameByLanguage[$languageId])) {
+                            $translated = $nameByLanguage[$languageId];
+                            break;
+                        }
+                    }
+
+                    $method = new ShippingMethodEntity();
+                    $method->setUniqueIdentifier(Uuid::randomHex());
+                    $method->setId(Uuid::randomHex());
+                    $method->setName($nameByLanguage[$chain[0]] ?? null);
+                    $method->setTranslated(['name' => $translated]);
+
+                    $delivery = new OrderDeliveryEntity();
+                    $delivery->setUniqueIdentifier(Uuid::randomHex());
+                    $delivery->setId(Uuid::randomHex());
+                    $delivery->setShippingMethodId($method->getId());
+                    $delivery->setShippingMethod($method);
+                    $loaded->setDeliveries(new OrderDeliveryCollection([$delivery]));
+                }
+
+                return new EntitySearchResult('order', 1, new OrderCollection([$loaded]), null, $criteria, $context);
+            },
+        );
+
+        return $repository;
     }
 
     private function lookup(int $count): InvoiceDocumentLookup
@@ -295,6 +417,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         $order->setUniqueIdentifier(Uuid::randomHex());
         $order->setSalesChannelId(Uuid::randomHex());
         $order->setOrderNumber($number);
+        $order->setLanguageId(Defaults::LANGUAGE_SYSTEM);
         $order->setOrderDateTime(new \DateTimeImmutable('2026-06-30T10:00:00+00:00'));
         $order->setTaxStatus(CartPrice::TAX_STATE_GROSS);
         $order->setCurrency($currency);
