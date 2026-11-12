@@ -42,21 +42,21 @@
             <label>Contact e-mail</label>
             <label lang="de-DE">Kontakt-E-Mail</label>
             <helpText>The seller contact e-mail (BT-43), which XRechnung requires (BR-DE-7). For XRechnung, ZUGFeRD and Factur-X it is also the seller electronic address (BT-34).</helpText>
-            <helpText lang="de-DE">E-Mail-Adresse des Verkäuferkontakts (BT-43), die XRechnung verlangt (BR-DE-7). Für XRechnung, ZUGFeRD und Factur-X ist sie auch die elektronische Adresse des Verkäufers (BT-34).</helpText>
+            <helpText lang="de-DE">Die E-Mail-Adresse des Ansprechpartners beim Verkäufer (BT-43), die für XRechnung erforderlich ist (BR-DE-7). Bei XRechnung, ZUGFeRD und Factur-X handelt es sich dabei auch um die elektronische Adresse des Verkäufers (BT-34).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerContactName</name>
             <label>Contact person</label>
             <label lang="de-DE">Ansprechpartner</label>
             <helpText>Seller contact name (BG-6 / BT-41). Required by XRechnung (BR-DE-5).</helpText>
-            <helpText lang="de-DE">Kontaktstelle des Verkäufers (BG-6 / BT-41). XRechnung verlangt sie (BR-DE-5).</helpText>
+            <helpText lang="de-DE">Name des Ansprechpartners beim Verkäufer (BG-6 / BT-41). Erforderlich gemäß XRechnung (BR-DE-5).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerPhone</name>
             <label>Contact phone</label>
             <label lang="de-DE">Telefon</label>
             <helpText>Seller contact telephone (BT-42). Required by XRechnung (BR-DE-6).</helpText>
-            <helpText lang="de-DE">Telefonnummer des Verkäuferkontakts (BT-42). XRechnung verlangt sie (BR-DE-6).</helpText>
+            <helpText lang="de-DE">Telefonnummer des Ansprechpartners beim Verkäufer (BT-42). Erforderlich gemäß XRechnung (BR-DE-6).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerStreet</name>
@@ -89,7 +89,7 @@
             <label>Payment means</label>
             <label lang="de-DE">Zahlungsart</label>
             <helpText>How the buyer pays (BG-16). Both options are credit transfers (codes 58 and 30), for which XRechnung requires the credit transfer details (BG-17, BR-DE-23-a). The plugin sends the payment details only together with an IBAN.</helpText>
-            <helpText lang="de-DE">Wie der Käufer zahlt (BG-16). Beide Optionen sind Überweisungen (Schlüssel 58 und 30), für die XRechnung die Angaben zur Überweisung verlangt (BG-17, BR-DE-23-a). Das Plugin übermittelt die Zahlungsangaben nur zusammen mit einer IBAN.</helpText>
+            <helpText lang="de-DE">Zahlungsart des Käufers (BG-16). Bei beiden Optionen handelt es sich um Überweisungen (Codes 58 und 30), für die XRechnung die Überweisungsdaten benötigt (BG-17, BR-DE-23-a). Das Plugin übermittelt die Zahlungsdaten nur zusammen mit einer IBAN.</helpText>
             <defaultValue>58</defaultValue>
             <options>
                 <option>
@@ -109,7 +109,7 @@
             <label>IBAN</label>
             <label lang="de-DE">IBAN</label>
             <helpText>The account the buyer pays into. Without an IBAN the invoice carries no payment instructions (BG-16), which XRechnung requires (BR-DE-1). Leave it empty only if you generate no XRechnung.</helpText>
-            <helpText lang="de-DE">Das Konto, auf das der Käufer zahlt. Ohne IBAN enthält die Rechnung keine Zahlungsanweisungen (BG-16), die XRechnung verlangt (BR-DE-1). Lassen Sie das Feld nur leer, wenn Sie keine XRechnung erzeugen.</helpText>
+            <helpText lang="de-DE">Das Konto, auf das der Käufer überweist. Ohne IBAN enthält die Rechnung keine Zahlungsanweisungen (BG-16), die für XRechnung vorgeschrieben sind (BR-DE-1). Lassen Sie das Feld nur leer, wenn Sie keine XRechnung erstellen.</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerBic</name>
@@ -179,13 +179,13 @@
         <input-field type="single-select">
             <name>output</name>
             <label>Output</label>
-            <label lang="de-DE">Ausgabe</label>
+            <label lang="de-DE">Ausgabeformat</label>
             <defaultValue>pdf</defaultValue>
             <options>
                 <option>
                     <id>pdf</id>
                     <name>PDF (hybrid, where the format supports it)</name>
-                    <name lang="de-DE">PDF (hybrid, wo das Format es unterstützt)</name>
+                    <name lang="de-DE">PDF (hybrid, wenn das Dokumentformat es unterstützt)</name>
                 </option>
                 <option>
                     <id>xml</id>
@@ -199,7 +199,7 @@
             <label>Only for business orders</label>
             <label lang="de-DE">Nur für Geschäftskunden</label>
             <helpText>Generate only when the buyer looks like a business (VAT ID, company, or business account). Turn off to generate for every order.</helpText>
-            <helpText lang="de-DE">Nur erzeugen, wenn der Käufer als Unternehmen erkennbar ist (USt-IdNr., Firma oder Geschäftskundenkonto). Ausschalten, um für jede Bestellung zu erzeugen.</helpText>
+            <helpText lang="de-DE">Nur erzeugen, wenn der Käufer als Unternehmen erkennbar ist (USt-IdNr., Firma oder Geschäftskundenkonto). Deaktivieren Sie diese Option, um für jede Bestellung eine E-Rechnung zu erstellen.</helpText>
             <defaultValue>true</defaultValue>
         </input-field>
         <input-field type="single-select">
@@ -223,9 +223,9 @@
         <input-field type="single-select">
             <name>zeroRateCategory</name>
             <label>VAT category for 0% lines</label>
-            <label lang="de-DE">USt-Kategorie für 0-%-Positionen</label>
+            <label lang="de-DE">USt-Kategorie für 0%-Positionen</label>
             <helpText>The tax treatment for zero-rated lines is the merchant's call. Reverse charge and intra-community supply are not auto-detected.</helpText>
-            <helpText lang="de-DE">Wie Positionen mit 0 % steuerlich behandelt werden, entscheidet der Händler. Umkehr der Steuerschuld (Reverse Charge) und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
+            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
             <defaultValue>Z</defaultValue>
             <options>
                 <option>
