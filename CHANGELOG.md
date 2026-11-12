@@ -11,8 +11,12 @@
   line needs an item name (BT-153, BR-25) and no specification prescribes one
   for shipping, so the plugin does not make one up.
 - German admin texts: the German labels are written with umlauts and ß, every
-  help text and the labels that had none have a German version, and the
-  German Store description is written with umlauts.
+  help text and every field label that had none has a German version, as do the
+  output and trigger options, and the German Store description is written with
+  umlauts. The VAT category options (Z, E, G) keep their English names.
+- The contact e-mail help text said it is always the seller electronic address
+  (BT-34). It is for XRechnung, ZUGFeRD and Factur-X; Peppol BIS takes BT-34
+  from the VAT ID.
 - The IBAN help text said that without payment fields XRechnung needs the bank
   details another way. Without an IBAN the invoice carries no payment
   instructions (BG-16), which XRechnung requires (BR-DE-1); the text now says

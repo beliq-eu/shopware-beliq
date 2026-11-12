@@ -41,8 +41,8 @@
             <name>sellerEmail</name>
             <label>Contact e-mail</label>
             <label lang="de-DE">Kontakt-E-Mail</label>
-            <helpText>The seller contact e-mail (BT-43), which XRechnung requires (BR-DE-7). Also used as the seller electronic address (BT-34).</helpText>
-            <helpText lang="de-DE">E-Mail-Adresse des Verkäuferkontakts (BT-43), die XRechnung verlangt (BR-DE-7). Sie dient auch als elektronische Adresse des Verkäufers (BT-34).</helpText>
+            <helpText>The seller contact e-mail (BT-43), which XRechnung requires (BR-DE-7). For XRechnung, ZUGFeRD and Factur-X it is also the seller electronic address (BT-34).</helpText>
+            <helpText lang="de-DE">E-Mail-Adresse des Verkäuferkontakts (BT-43), die XRechnung verlangt (BR-DE-7). Für XRechnung, ZUGFeRD und Factur-X ist sie auch die elektronische Adresse des Verkäufers (BT-34).</helpText>
         </input-field>
         <input-field type="text">
             <name>sellerContactName</name>
