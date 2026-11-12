@@ -5,8 +5,9 @@
 - The shipping line takes the order's shipping method name, in the language the
   order was placed in, where it read `Shipping` on every order. The order is
   loaded with its own language first, as Shopware's own invoice does. An order
-  with shipping costs whose deliveries name no shipping method, or name
-  different ones, gets no invoice and its failure names the missing value: every
+  whose deliveries that carry the shipping costs name no shipping method, or
+  name different ones, gets no invoice and its failure names the missing value
+  (an order the business-only setting skips is skipped first): every
   line needs an item name (BT-153, BR-25) and no specification prescribes one
   for shipping, so the plugin does not make one up.
 - German admin texts: the German labels are written with umlauts and ß, every

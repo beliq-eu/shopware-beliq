@@ -232,7 +232,30 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertNull($result->getOrderSuccess($order->getId()));
         $error = $result->getOrderError($order->getId());
         self::assertNotNull($error);
-        self::assertStringContainsString('shipping method', $error->getMessage());
+        self::assertStringContainsString('no delivery that carries them', $error->getMessage());
+        self::assertSame([], $http->calls);
+    }
+
+    /**
+     * The business-only setting decides before the conversion, so a consumer
+     * order it skips is not failed for a value only its invoice would need.
+     */
+    public function testPrivateOrderUnderBusinessOnlyIsSkippedBeforeShippingIsChecked(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->privateOrder('SW10050');
+        $order->setShippingCosts(new CalculatedPrice(
+            4.95,
+            4.95,
+            new CalculatedTaxCollection([new CalculatedTax(0.79, 19.0, 4.95)]),
+            new TaxRuleCollection(),
+        ));
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml', businessOnly: true), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        self::assertNull($result->getOrderError($order->getId()), 'skipping is a no-op, not an error');
         self::assertSame([], $http->calls);
     }
 
@@ -319,6 +342,7 @@ final class BeliqInvoiceRendererTest extends TestCase
                     $delivery->setId(Uuid::randomHex());
                     $delivery->setShippingMethodId($method->getId());
                     $delivery->setShippingMethod($method);
+                    $delivery->setShippingCosts($order->getShippingCosts());
                     $loaded->setDeliveries(new OrderDeliveryCollection([$delivery]));
                 }
 

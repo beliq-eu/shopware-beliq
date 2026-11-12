@@ -58,6 +58,24 @@ final class OrderAdapter
             $lines[] = $line;
         }
 
+        return $this->sourceOrder($order, $config, $lines);
+    }
+
+    /**
+     * The order with its parties and none of its lines: what the business-only
+     * setting decides on. Deciding on this first means an order the setting skips
+     * is never checked for values only its invoice would need.
+     */
+    public function toGateOrder(OrderEntity $order, PluginConfig $config): SourceOrder
+    {
+        return $this->sourceOrder($order, $config, []);
+    }
+
+    /**
+     * @param list<SourceLine> $lines
+     */
+    private function sourceOrder(OrderEntity $order, PluginConfig $config, array $lines): SourceOrder
+    {
         $customer = $order->getOrderCustomer();
         $billing = $order->getBillingAddress();
 
@@ -185,28 +203,34 @@ final class OrderAdapter
     }
 
     /**
-     * The name of the shipping method the order's shipping costs belong to. Every
-     * invoice line needs an item name (BT-153, rule BR-25 of EN 16931), and no
-     * specification prescribes one for shipping, so the name is the shop's own or
-     * there is no invoice: an order whose deliveries name no method, or name
+     * The name of the shipping method the order's shipping costs belong to, read
+     * from the deliveries that carry part of those costs. Every invoice line
+     * needs an item name (BT-153, rule BR-25 of EN 16931), and no specification
+     * prescribes one for shipping, so the name is the shop's own or there is no
+     * invoice: an order whose charged deliveries name no method, or name
      * different ones, stops here rather than carrying a made-up name.
      */
     private function shippingMethodName(OrderEntity $order): string
     {
+        $orderLabel = $order->getOrderNumber() ?? $order->getId();
+
         $names = [];
         foreach ($order->getDeliveries() ?? [] as $delivery) {
+            if ($delivery->getShippingCosts()->getTotalPrice() === 0.0) {
+                continue;
+            }
             $name = $delivery->getShippingMethod()?->getTranslation('name');
             if (!is_string($name) || trim($name) === '') {
-                throw MissingOrderDataException::shippingMethodName($order->getOrderNumber() ?? '');
+                throw MissingOrderDataException::shippingMethodName($orderLabel);
             }
             $names[trim($name)] = true;
         }
 
         if ($names === []) {
-            throw MissingOrderDataException::shippingMethodName($order->getOrderNumber() ?? '');
+            throw MissingOrderDataException::noChargedDelivery($orderLabel);
         }
         if (count($names) > 1) {
-            throw MissingOrderDataException::severalShippingMethods($order->getOrderNumber() ?? '', array_keys($names));
+            throw MissingOrderDataException::severalShippingMethods($orderLabel, array_map('strval', array_keys($names)));
         }
 
         return (string) array_key_first($names);

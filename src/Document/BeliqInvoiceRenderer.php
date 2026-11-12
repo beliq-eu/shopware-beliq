@@ -67,12 +67,14 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 }
 
                 $config = $this->configProvider->get($order->getSalesChannelId());
-                $source = $this->adapter->toSourceOrder($order, $config);
 
                 // Business-only gate: skipping is a deliberate no-op, not an error.
-                if (!$config->allowsOrder($source)) {
+                // It runs before the conversion, which stops on missing data.
+                if (!$config->allowsOrder($this->adapter->toGateOrder($order, $config))) {
                     continue;
                 }
+
+                $source = $this->adapter->toSourceOrder($order, $config);
 
                 $body = $this->mapper->toGenerateBody(
                     $source,

@@ -56,9 +56,10 @@ Still open:
   The line takes the shipping method's name in the order's language, as
   Shopware's own invoice does. It reads the method's current name, so a method
   renamed after the order gives the new name on a later attempt or a
-  regenerate. An order with shipping costs whose deliveries name no shipping
-  method, or name different ones, gets no invoice: the failure names the missing
-  value on the order.
+  regenerate. An order whose deliveries that carry the shipping costs name no
+  shipping method, or name different ones, gets no invoice: the failure on the
+  order names the missing value. The business-only setting decides first, so an
+  order it skips is never failed for this.
 - Sends it to beliq to generate the document in the format you choose, and can
   validate it against the authority-pinned rules.
 - Stores the resulting document on the order.
