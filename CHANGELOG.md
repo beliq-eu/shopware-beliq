@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 (2026-11-12)
+## 0.2.1 (2026-11-13)
 
 - The shipping line takes the order's shipping method name, in the language the
   order was placed in, where it read `Shipping` on every order. The order is
@@ -12,8 +12,12 @@
   for shipping, so the plugin does not make one up.
 - German admin texts: the German labels are written with umlauts and ß, every
   help text and every field label that had none has a German version, as do the
-  output and trigger options, and the German Store description is written with
-  umlauts. The VAT category options (Z, E, G) keep their English names.
+  document format, output and trigger options. The German texts use one word for
+  each thing: "erstellen" for generating, as Shopware's own document card does,
+  "Daten" for details, and "Ansprechpartner beim Verkäufer" for the seller
+  contact (BG-6). The German Store description is written with umlauts, and it
+  says "Übermittlung und Einreichung" where "Versand und Meldung" read as
+  shipping goods. The VAT category options (Z, E, G) keep their English names.
 - The contact e-mail help text said it is always the seller electronic address
   (BT-34). It is for XRechnung, ZUGFeRD and Factur-X; Peppol BIS takes BT-34
   from the VAT ID.

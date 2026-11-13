@@ -16,7 +16,7 @@
 
     <card>
         <title>Seller details</title>
-        <title lang="de-DE">Verkäuferangaben</title>
+        <title lang="de-DE">Verkäuferdaten</title>
         <input-field type="text">
             <name>sellerName</name>
             <label>Legal name</label>
@@ -54,7 +54,7 @@
         <input-field type="text">
             <name>sellerPhone</name>
             <label>Contact phone</label>
-            <label lang="de-DE">Telefon</label>
+            <label lang="de-DE">Kontakttelefon</label>
             <helpText>Seller contact telephone (BT-42). Required by XRechnung (BR-DE-6).</helpText>
             <helpText lang="de-DE">Telefonnummer des Ansprechpartners beim Verkäufer (BT-42). Erforderlich gemäß XRechnung (BR-DE-6).</helpText>
         </input-field>
@@ -83,7 +83,7 @@
 
     <card>
         <title>Payment details</title>
-        <title lang="de-DE">Zahlungsangaben</title>
+        <title lang="de-DE">Zahlungsdaten</title>
         <input-field type="single-select">
             <name>paymentMeansCode</name>
             <label>Payment means</label>
@@ -125,11 +125,11 @@
 
     <card>
         <title>Invoice generation</title>
-        <title lang="de-DE">Rechnungserzeugung</title>
+        <title lang="de-DE">Rechnungserstellung</title>
         <input-field type="bool">
             <name>enabled</name>
             <label>Generate invoices automatically</label>
-            <label lang="de-DE">Rechnungen automatisch erzeugen</label>
+            <label lang="de-DE">Rechnungen automatisch erstellen</label>
             <defaultValue>false</defaultValue>
         </input-field>
         <input-field type="single-select">
@@ -141,10 +141,12 @@
                 <option>
                     <id>zugferd</id>
                     <name>ZUGFeRD / Factur-X (hybrid PDF)</name>
+                    <name lang="de-DE">ZUGFeRD / Factur-X (Hybrid-PDF)</name>
                 </option>
                 <option>
                     <id>facturx</id>
                     <name>Factur-X (hybrid PDF)</name>
+                    <name lang="de-DE">Factur-X (Hybrid-PDF)</name>
                 </option>
                 <option>
                     <id>xrechnung</id>
@@ -199,13 +201,13 @@
             <label>Only for business orders</label>
             <label lang="de-DE">Nur für Geschäftskunden</label>
             <helpText>Generate only when the buyer looks like a business (VAT ID, company, or business account). Turn off to generate for every order.</helpText>
-            <helpText lang="de-DE">Nur erzeugen, wenn der Käufer als Unternehmen erkennbar ist (USt-IdNr., Firma oder Geschäftskundenkonto). Deaktivieren Sie diese Option, um für jede Bestellung eine E-Rechnung zu erstellen.</helpText>
+            <helpText lang="de-DE">Nur erstellen, wenn der Käufer als Unternehmen erkennbar ist (USt-IdNr., Firma oder Geschäftskundenkonto). Deaktivieren Sie diese Option, um für jede Bestellung eine Rechnung zu erstellen.</helpText>
             <defaultValue>true</defaultValue>
         </input-field>
         <input-field type="single-select">
             <name>triggerEvent</name>
             <label>Generate when</label>
-            <label lang="de-DE">Erzeugen bei</label>
+            <label lang="de-DE">Erstellen bei</label>
             <defaultValue>state_enter.order_transaction.state.paid</defaultValue>
             <options>
                 <option>
