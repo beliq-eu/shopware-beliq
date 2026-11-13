@@ -40,7 +40,7 @@
         <input-field type="text">
             <name>sellerEmail</name>
             <label>Contact e-mail</label>
-            <label lang="de-DE">Kontakt-E-Mail</label>
+            <label lang="de-DE">E-Mail</label>
             <helpText>The seller contact e-mail (BT-43), which XRechnung requires (BR-DE-7). For XRechnung, ZUGFeRD and Factur-X it is also the seller electronic address (BT-34).</helpText>
             <helpText lang="de-DE">Die E-Mail-Adresse des Ansprechpartners beim Verkäufer (BT-43), die für XRechnung erforderlich ist (BR-DE-7). Bei XRechnung, ZUGFeRD und Factur-X handelt es sich dabei auch um die elektronische Adresse des Verkäufers (BT-34).</helpText>
         </input-field>
@@ -54,7 +54,7 @@
         <input-field type="text">
             <name>sellerPhone</name>
             <label>Contact phone</label>
-            <label lang="de-DE">Kontakttelefon</label>
+            <label lang="de-DE">Telefon</label>
             <helpText>Seller contact telephone (BT-42). Required by XRechnung (BR-DE-6).</helpText>
             <helpText lang="de-DE">Telefonnummer des Ansprechpartners beim Verkäufer (BT-42). Erforderlich gemäß XRechnung (BR-DE-6).</helpText>
         </input-field>
