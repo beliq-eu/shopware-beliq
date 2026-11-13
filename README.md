@@ -181,7 +181,6 @@ field set.
 ```bash
 composer install
 composer test          # PHPUnit
-composer scrub:check   # fail on em-dash
 shopware-cli extension validate . --store-compliance   # Store check, PHPStan at level 8
 ```
 

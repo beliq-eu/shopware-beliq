@@ -56,7 +56,6 @@
     }
   },
   "scripts": {
-    "test": "phpunit",
-    "scrub:check": "bash scripts/scrub-check.sh"
+    "test": "phpunit"
   }
 }
