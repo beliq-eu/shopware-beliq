@@ -3,6 +3,7 @@
 namespace Beliq\Shopware\Tests;
 
 use Beliq\Shopware\Config\PluginConfig;
+use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Invoice\Address;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\PaymentMeans;
@@ -18,9 +19,12 @@ use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderAddress\OrderAddressEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderCustomer\OrderCustomerEntity;
+use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryCollection;
+use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemCollection;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\Currency\CurrencyEntity;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -123,7 +127,7 @@ final class OrderAdapterTest extends TestCase
 
         self::assertCount(2, $source->lines);
         $shipping = $source->lines[1];
-        self::assertSame('Shipping', $shipping->description);
+        self::assertSame('Standard', $shipping->description);
         self::assertEqualsWithDelta(1.0, $shipping->quantity, 0.001);
         self::assertEqualsWithDelta(4.16, $shipping->lineNetTotal, 0.001);
         self::assertEqualsWithDelta(19.0, $shipping->vatRate, 0.001);
@@ -181,6 +185,75 @@ final class OrderAdapterTest extends TestCase
         $order = $this->businessOrder(CartPrice::TAX_STATE_GROSS, $this->shipping(0.0, []));
 
         self::assertCount(1, $this->adapter->toSourceOrder($order, $this->config())->lines);
+    }
+
+    /**
+     * Free shipping adds no line, so an order without a delivery still converts.
+     */
+    public function testFreeShippingNeedsNoShippingMethod(): void
+    {
+        $order = $this->businessOrder(CartPrice::TAX_STATE_GROSS, $this->shipping(0.0, []), shippingMethods: []);
+
+        self::assertCount(1, $this->adapter->toSourceOrder($order, $this->config())->lines);
+    }
+
+    /**
+     * Every shipping line of a split charge carries the one method's name.
+     */
+    public function testEveryLineOfASplitShippingChargeTakesTheMethodName(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_GROSS,
+            $this->shipping(10.0, [[0.96, 19.0, 6.0], [0.26, 7.0, 4.0]]),
+            shippingMethods: ['Express', 'Express'],
+        );
+
+        $shipping = array_slice($this->adapter->toSourceOrder($order, $this->config())->lines, 1);
+
+        self::assertSame(['Express', 'Express'], array_map(static fn ($line) => $line->description, $shipping));
+    }
+
+    /**
+     * A free delivery carries none of the shipping costs, so its method does not
+     * name the line and does not count as a second method.
+     */
+    public function testAFreeDeliveryUnderAnotherMethodDoesNotNameTheLine(): void
+    {
+        $order = $this->businessOrder(
+            CartPrice::TAX_STATE_GROSS,
+            $this->shipping(4.95, [[0.79, 19.0, 4.95]]),
+            shippingMethods: ['Express'],
+            freeShippingMethods: ['Pickup'],
+        );
+
+        self::assertSame('Express', $this->adapter->toSourceOrder($order, $this->config())->lines[1]->description);
+    }
+
+    public function testShippingWithoutADeliveryStops(): void
+    {
+        $order = $this->businessOrder(CartPrice::TAX_STATE_GROSS, $this->shipping(4.95, [[0.79, 19.0, 4.95]]), shippingMethods: []);
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Order SW10001 has shipping costs but no delivery that carries them');
+        $this->adapter->toSourceOrder($order, $this->config());
+    }
+
+    public function testShippingWhoseMethodHasNoNameStops(): void
+    {
+        $order = $this->businessOrder(CartPrice::TAX_STATE_GROSS, $this->shipping(4.95, [[0.79, 19.0, 4.95]]), shippingMethods: ['Standard', null]);
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('whose shipping method has no name');
+        $this->adapter->toSourceOrder($order, $this->config());
+    }
+
+    public function testShippingAcrossDifferentMethodsStops(): void
+    {
+        $order = $this->businessOrder(CartPrice::TAX_STATE_GROSS, $this->shipping(4.95, [[0.79, 19.0, 4.95]]), shippingMethods: ['Standard', 'Express']);
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('different shipping methods');
+        $this->adapter->toSourceOrder($order, $this->config());
     }
 
     /**
@@ -496,9 +569,10 @@ final class OrderAdapterTest extends TestCase
     }
 
     /**
-     * @param list<OrderLineItemEntity> $lines
+     * @param list<string|null> $shippingMethods
+     * @param list<string> $freeShippingMethods
      */
-    private function businessOrder(string $taxStatus, CalculatedPrice $shipping): OrderEntity
+    private function businessOrder(string $taxStatus, CalculatedPrice $shipping, array $shippingMethods = ['Standard'], array $freeShippingMethods = []): OrderEntity
     {
         // Two widgets at 100 net / 119 gross each, in the order's own tax status.
         $widget = match ($taxStatus) {
@@ -513,6 +587,8 @@ final class OrderAdapterTest extends TestCase
             customer: $this->customer('buyer@acme.test', 'Ada', 'Byte', 'ACME GmbH', ['DE123456789'], CustomerEntity::ACCOUNT_TYPE_BUSINESS),
             billing: $this->address('Hauptstrasse 1', '10115', 'Berlin', 'DE', 'ACME GmbH'),
             shipping: $shipping,
+            shippingMethods: $shippingMethods,
+            freeShippingMethods: $freeShippingMethods,
         );
     }
 
@@ -529,6 +605,42 @@ final class OrderAdapterTest extends TestCase
         return new CalculatedPrice($total, $total, $collection, new TaxRuleCollection());
     }
 
+    /**
+     * One delivery per entry of $methodNames, each carrying the shipping costs,
+     * and one free delivery per entry of $freeMethods. A method's name is the
+     * loaded language's, as the DAL puts it in `translated`; null stands for a
+     * method that has no name.
+     *
+     * @param list<string|null> $methodNames
+     * @param list<string> $freeMethods
+     */
+    private function deliveries(array $methodNames, CalculatedPrice $charged, array $freeMethods = []): OrderDeliveryCollection
+    {
+        $free = $this->shipping(0.0, []);
+        $deliveries = new OrderDeliveryCollection();
+        foreach ([...array_map(static fn ($name) => [$name, $charged], $methodNames), ...array_map(static fn ($name) => [$name, $free], $freeMethods)] as [$name, $costs]) {
+            $method = new ShippingMethodEntity();
+            $method->setUniqueIdentifier(Uuid::randomHex());
+            $method->setId(Uuid::randomHex());
+            $method->setTranslated(['name' => $name]);
+
+            $delivery = new OrderDeliveryEntity();
+            $delivery->setUniqueIdentifier(Uuid::randomHex());
+            $delivery->setId(Uuid::randomHex());
+            $delivery->setShippingMethodId($method->getId());
+            $delivery->setShippingMethod($method);
+            $delivery->setShippingCosts($costs);
+            $deliveries->add($delivery);
+        }
+
+        return $deliveries;
+    }
+
+    /**
+     * @param list<OrderLineItemEntity> $lines
+     * @param list<string|null> $shippingMethods
+     * @param list<string> $freeShippingMethods
+     */
     private function order(
         string $taxStatus,
         OrderCustomerEntity $customer,
@@ -538,6 +650,8 @@ final class OrderAdapterTest extends TestCase
         string $currency = 'EUR',
         ?array $customFields = null,
         ?CalculatedPrice $shipping = null,
+        array $shippingMethods = ['Standard'],
+        array $freeShippingMethods = [],
     ): OrderEntity {
         $currencyEntity = new CurrencyEntity();
         $currencyEntity->setUniqueIdentifier(Uuid::randomHex());
@@ -555,6 +669,7 @@ final class OrderAdapterTest extends TestCase
         $order->setOrderCustomer($customer);
         $order->setBillingAddress($billing);
         $order->setShippingCosts($shipping ?? $this->shipping(0.0, []));
+        $order->setDeliveries($this->deliveries($shippingMethods, $order->getShippingCosts(), $freeShippingMethods));
         if ($customFields !== null) {
             $order->setCustomFields($customFields);
         }

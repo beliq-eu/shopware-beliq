@@ -102,9 +102,9 @@ final class PluginConfigProvider
         );
 
         // The payment means (BG-16) needs an account to be payable: without an
-        // IBAN there is nothing to emit, and XRechnung's BR-DE-23-a rejects a
-        // credit transfer (code 58) that carries no IBAN. So it is assembled only
-        // when the merchant has configured a bank account.
+        // IBAN there is nothing to emit, and XRechnung's BR-DE-23-a requires the
+        // credit transfer details (BG-17) for both offered codes, 58 and 30. So it
+        // is assembled only when the merchant has configured a bank account.
         $iban = $nullable('sellerIban');
         $paymentMeansCode = $str('paymentMeansCode', self::DEFAULT_PAYMENT_MEANS_CODE);
         if (!in_array($paymentMeansCode, self::PAYMENT_MEANS_CODES, true)) {

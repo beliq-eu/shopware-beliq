@@ -7,9 +7,9 @@ and tax-authority reporting stay with your access point.
 
 ## Status
 
-Version 0.2.0 is on Packagist as
+Version 0.2.1 is on Packagist as
 [`beliq/shopware-beliq`](https://packagist.org/packages/beliq/shopware-beliq),
-built from the tag `v0.2.0`. It is not in the Shopware Store.
+built from the tag `v0.2.1`. It is not in the Shopware Store.
 
 Built and unit tested:
 
@@ -53,6 +53,13 @@ Still open:
 - Reads a completed order and builds a valid EN 16931 invoice from its lines,
   shipping, taxes, parties, and totals. Shipping becomes its own line, split per
   VAT rate when the shipping method spreads its tax across the cart's rates.
+  The line takes the shipping method's name in the order's language, as
+  Shopware's own invoice does. It reads the method's current name, so a method
+  renamed after the order gives the new name on a later attempt or a
+  regenerate. An order whose deliveries that carry the shipping costs name no
+  shipping method, or name different ones, gets no invoice: the failure on the
+  order names the missing value. The business-only setting decides first, so an
+  order it skips is never failed for this.
 - Sends it to beliq to generate the document in the format you choose, and can
   validate it against the authority-pinned rules.
 - Stores the resulting document on the order.
