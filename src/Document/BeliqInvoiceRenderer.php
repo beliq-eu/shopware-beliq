@@ -21,7 +21,7 @@ use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
 
 /**
  * Produces a beliq invoice as a first-class Shopware order document. This renderer
- * is the single place that turns an order into a compliant document: it reloads
+ * is the single place that turns an order into an e-invoice document: it reloads
  * the order with the associations the adapter needs, applies the business-only
  * gate, maps the order onto a beliq generate body, and calls the beliq API. The
  * returned bytes (XRechnung / ZUGFeRD / Factur-X / Peppol BIS, XML or hybrid PDF)
