@@ -1,8 +1,8 @@
 # shopware-beliq
 
-A Shopware 6 plugin that turns store orders into compliant EN 16931 e-invoices
+A Shopware 6 plugin that turns store orders into EN 16931 e-invoices
 (XRechnung, ZUGFeRD, Factur-X, Peppol BIS) through the [beliq](https://beliq.eu)
-API. beliq produces and checks the compliant document; transmission, archiving,
+API. beliq produces and checks the document; transmission, archiving,
 and tax-authority reporting stay with your access point.
 
 ## Status
@@ -50,7 +50,7 @@ Still open:
 
 ## What it does
 
-- Reads a completed order and builds a valid EN 16931 invoice from its lines,
+- Reads a completed order and builds an EN 16931 invoice from its lines,
   shipping, taxes, parties, and totals. Shipping becomes its own line, split per
   VAT rate when the shipping method spreads its tax across the cart's rates.
   The line takes the shipping method's name in the order's language, as
@@ -60,11 +60,12 @@ Still open:
   shipping method, or name different ones, gets no invoice: the failure on the
   order names the missing value. The business-only setting decides first, so an
   order it skips is never failed for this.
-- Sends it to beliq to generate the document in the format you choose, and can
-  validate it against the authority-pinned rules.
+- Sends it to beliq to generate the document in the format you choose. beliq
+  checks the generated document against the rule packs and schemas of its
+  format, each pinned by version and hash.
 - Stores the resulting document on the order.
 
-The plugin generates and validates; it does not transmit. Peppol delivery,
+The plugin generates; it does not transmit. Peppol delivery,
 e-mail, and filing remain with the merchant.
 
 ## Scope of generation
