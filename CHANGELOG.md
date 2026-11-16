@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The Store descriptions in English and German and the README say that
+  delivery through beliq is in development, next to what the plugin does
+  today: it generates the document, which beliq checks, and does not send it.
+  Before, they said only that sending and filing stay with the merchant, which
+  read as if beliq would never deliver.
+
 ## 0.2.2 (2026-11-16)
 
 - The Packagist description, the plugin descriptions in English and German and
