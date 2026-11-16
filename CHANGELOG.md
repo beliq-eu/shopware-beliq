@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 (2026-11-16)
+
+- The Packagist description, the plugin descriptions in English and German and
+  the README no longer call the invoices compliant ("konforme") or the rules
+  authority-pinned. The README says beliq checks each document during
+  generation against the rule packs and schemas of its format; the plugin has
+  no separate validate step. No behaviour changed.
+
 ## 0.2.1 (2026-11-13)
 
 - The shipping line takes the order's shipping method name, in the language the
