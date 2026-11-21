@@ -226,8 +226,8 @@
             <name>zeroRateCategory</name>
             <label>VAT category for 0% lines</label>
             <label lang="de-DE">USt-Kategorie für 0%-Positionen</label>
-            <helpText>The tax treatment for zero-rated lines is the merchant's call. Reverse charge and intra-community supply are not auto-detected.</helpText>
-            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
+            <helpText>The tax treatment for zero-rated lines is the merchant's call. It applies to every 0% line, those of orders Shopware marks tax free included. Reverse charge and intra-community supply are not auto-detected.</helpText>
+            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Sie gilt für jede 0%-Position, auch für die Positionen steuerfreier Bestellungen. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
             <defaultValue>Z</defaultValue>
             <options>
                 <option>
@@ -243,6 +243,34 @@
                     <name>G - Export outside the EU</name>
                 </option>
             </options>
+        </input-field>
+        <input-field type="text">
+            <name>exemptReasonCode</name>
+            <label>Exemption reason code for category E</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie E</label>
+            <helpText>A code from the VATEX code list (BT-121). An invoice with 0% lines in category E needs this code or the text below (BR-E-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121). Eine Rechnung mit 0%-Positionen der Kategorie E braucht diesen Code oder den Text darunter (BR-E-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>exemptReasonText</name>
+            <label>Exemption reason text for category E</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie E</label>
+            <helpText>Why the supply is exempt from VAT, in words (BT-120).</helpText>
+            <helpText lang="de-DE">Warum die Leistung von der Umsatzsteuer befreit ist, in Worten (BT-120).</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>exportReasonCode</name>
+            <label>Exemption reason code for category G</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie G</label>
+            <helpText>A code from the VATEX code list (BT-121) that means "Export outside the EU". An invoice with 0% lines in category G needs this code or the text below (BR-G-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Export outside the EU“. Eine Rechnung mit 0%-Positionen der Kategorie G braucht diesen Code oder den Text darunter (BR-G-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>exportReasonText</name>
+            <label>Exemption reason text for category G</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie G</label>
+            <helpText>The text "Export outside the EU", or the same standard text in another language (BT-120).</helpText>
+            <helpText lang="de-DE">Der Text „Export outside the EU“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
         </input-field>
     </card>
 </config>

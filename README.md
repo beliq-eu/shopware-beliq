@@ -45,11 +45,6 @@ invoice from a non-German order included. On 2026-11-21 the Dockware smoke in
 `smoke/` passed 36 of 36 checks against the production API: XRechnung, Peppol
 BIS and ZUGFeRD documents stored on paid orders, each validated green.
 
-Still open:
-
-- Non-standard VAT categories (reverse charge, intra-community, export) carry no
-  exemption reason. The beliq API accepts one; the plugin does not send it.
-
 ## What it does
 
 - Reads a completed order and builds an EN 16931 invoice from its lines,
@@ -79,9 +74,19 @@ matches where a structured e-invoice is legally meaningful. A merchant can widen
 generation to all orders.
 
 Lines taxed at a standard rate are mapped to VAT category `S`. A zero-rated line
-takes a merchant-configured category (default `Z`). Cross-border reverse charge
-and intra-community supply are the merchant's call to configure. They are not
-auto-detected: a wrong guess in a compliance tool is worse than none.
+takes a merchant-configured category: `Z` zero rated (the default), `E` exempt
+from VAT, or `G` export outside the EU. Reverse charge and intra-community
+supply are not offered and not auto-detected: a wrong guess in a compliance
+tool is worse than none.
+
+EN 16931 requires a VAT exemption reason, a code from the VATEX code list
+(BT-121) or a text (BT-120), for category `E` (BR-E-10) and `G` (BR-G-10), and
+forbids one for `Z` (BR-Z-10) and `S` (BR-S-10). The settings hold one reason
+for `E` and one for `G`, and the plugin sends it as you enter it on the VAT
+breakdown of that category. An order with lines in `E` or `G` and no reason
+set for that category gets no invoice: the failure on the order names the
+category and the rule, and no beliq call is made. The category and its reason
+apply to every 0% line, the lines of an order Shopware marks tax free included.
 
 ## Install
 
@@ -107,6 +112,8 @@ In the plugin settings (Extensions -> beliq e-invoicing -> Configure):
 - Pick the document format (ZUGFeRD / Factur-X hybrid PDF by default), profile,
   and whether to output a hybrid PDF or XML only.
 - Choose when to generate: on payment paid (default) or on order completed.
+- If you pick `E` or `G` for 0% lines, enter the exemption reason for that
+  category (see Scope of generation).
 - Turn on `Generate invoices automatically`. Generation is off until you do.
 
 The generated document is stored as a beliq e-invoice document on the order (its

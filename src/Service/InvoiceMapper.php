@@ -2,6 +2,7 @@
 
 namespace Beliq\Shopware\Service;
 
+use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Invoice\SourceLine;
 use Beliq\Shopware\Invoice\SourceOrder;
 
@@ -18,10 +19,29 @@ use Beliq\Shopware\Invoice\SourceOrder;
  * the invoice's line total (BT-106) and each group's taxable amount (BT-116) must
  * equal the sum of the line nets as emitted (BR-CO-10, BR-S-08), which rounding an
  * unrounded sum does not guarantee.
+ *
+ * A VAT breakdown in a category that needs an exemption reason carries the
+ * merchant's reason for that category. Standard rated (BR-S-10) and zero rated
+ * (BR-Z-10) breakdowns must not carry one, so they never get it.
  */
 final class InvoiceMapper
 {
     private const DEFAULT_STANDARD_CATEGORY = 'S';
+
+    /**
+     * The categories whose VAT breakdown needs an exemption reason code (BT-121)
+     * or text (BT-120), each with the EN 16931 rule that requires it.
+     */
+    private const REASON_REQUIRED = [
+        'AE' => 'BR-AE-10',
+        'E' => 'BR-E-10',
+        'G' => 'BR-G-10',
+        'K' => 'BR-IC-10',
+        'O' => 'BR-O-10',
+    ];
+
+    /** The categories PluginConfigProvider reads a reason for. */
+    private const CONFIGURABLE_REASONS = ['E', 'G'];
 
     /**
      * @return array<string, mixed> the JSON body for POST /v1/generate
@@ -121,7 +141,7 @@ final class InvoiceMapper
      * summed taxable amount. Sorted by category then rate for a stable result.
      *
      * @param list<SourceLine> $lines
-     * @return list<array{vatCategoryCode: string, vatRate: float, taxableAmount: float, taxAmount: float}>
+     * @return list<array<string, string|float>>
      */
     private function buildTaxSummary(array $lines, SourceOrder $order): array
     {
@@ -152,10 +172,34 @@ final class InvoiceMapper
                 'vatRate' => $group['vatRate'],
                 'taxableAmount' => $taxable,
                 'taxAmount' => $this->round2($taxable * $group['vatRate'] / 100),
+                ...$this->exemptionReason($group['vatCategoryCode'], $order),
             ];
         }
 
         return $summary;
+    }
+
+    /**
+     * @return array<string, string> the reason fields for a breakdown in this category
+     */
+    private function exemptionReason(string $category, SourceOrder $order): array
+    {
+        $rule = self::REASON_REQUIRED[$category] ?? null;
+        if ($rule === null) {
+            return [];
+        }
+
+        $reason = ($order->exemptionReasons[$category] ?? null)?->toArray() ?? [];
+        if ($reason === []) {
+            throw MissingOrderDataException::exemptionReason(
+                $order->number,
+                $category,
+                $rule,
+                in_array($category, self::CONFIGURABLE_REASONS, true),
+            );
+        }
+
+        return $reason;
     }
 
     private function lineNet(SourceLine $line): float

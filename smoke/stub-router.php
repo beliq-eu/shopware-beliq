@@ -32,6 +32,16 @@ if ($method === 'GET' && $path === '/__smoke/generate-count') {
     return true;
 }
 
+// The last generate body, so smoke.php can read what the plugin sent.
+$lastBodyFile = sys_get_temp_dir() . '/beliq-smoke-stub-last-generate-' . $_SERVER['SERVER_PORT'];
+
+if ($method === 'GET' && $path === '/__smoke/last-generate') {
+    header('Content-Type: application/json');
+    echo is_file($lastBodyFile) ? file_get_contents($lastBodyFile) : 'null';
+
+    return true;
+}
+
 if (($_SERVER['HTTP_X_API_KEY'] ?? '') === '') {
     return $json(401, ['success' => false, 'error' => ['code' => 'UNAUTHORIZED', 'message' => 'X-API-Key missing']]);
 }
@@ -45,7 +55,9 @@ if ($method === 'POST' && $path === '/v1/generate') {
     fwrite($handle, (string) ($count + 1));
     fclose($handle);
 
-    $body = json_decode((string) file_get_contents('php://input'), true);
+    $raw = (string) file_get_contents('php://input');
+    file_put_contents($lastBodyFile, $raw);
+    $body = json_decode($raw, true);
     if (($body['output'] ?? 'xml') === 'pdf') {
         header('Content-Type: application/pdf');
         echo "%PDF-1.7\n% beliq smoke stub\n%%EOF\n";

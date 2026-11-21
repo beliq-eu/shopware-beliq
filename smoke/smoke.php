@@ -224,6 +224,18 @@ function stubGenerateCount(string $baseUrl): int
     return (int) $res['body'];
 }
 
+/** The body of the last generate call stub-router.php answered. */
+function stubLastGenerate(string $baseUrl): array
+{
+    $res = http('GET', $baseUrl . '/__smoke/last-generate', []);
+    $body = json_decode($res['body'], true);
+    if ($res['status'] !== 200 || !is_array($body)) {
+        throw new RuntimeException('stub last generate -> ' . $res['status']);
+    }
+
+    return $body;
+}
+
 function orderCustomFields(string $orderId): array
 {
     return search('order', ['ids' => [$orderId]])[0]['customFields'] ?? [];
@@ -262,6 +274,7 @@ $standardTax = search('tax', ['filter' => [['type' => 'equals', 'field' => 'taxR
 admin('POST', '/_action/sync', [
     'smoke-tax' => ['entity' => 'tax', 'action' => 'upsert', 'payload' => [
         ['id' => sid('tax-fr-20'), 'name' => 'beliq smoke FR 20', 'taxRate' => 20],
+        ['id' => sid('tax-0'), 'name' => 'beliq smoke 0', 'taxRate' => 0],
     ]],
     'smoke-products' => ['entity' => 'product', 'action' => 'upsert', 'payload' => array_map(
         static fn (array $p) => [
@@ -277,11 +290,13 @@ admin('POST', '/_action/sync', [
         [
             ['number' => 'BELIQ-SMOKE-19', 'name' => 'Smoke widget 19%', 'taxId' => $standardTax, 'gross' => 59.5],
             ['number' => 'BELIQ-SMOKE-20', 'name' => 'Smoke widget 20%', 'taxId' => sid('tax-fr-20'), 'gross' => 60.0],
+            ['number' => 'BELIQ-SMOKE-0', 'name' => 'Smoke course 0%', 'taxId' => sid('tax-0'), 'gross' => 50.0],
         ],
     )],
 ]);
 $product19 = sid('product-BELIQ-SMOKE-19');
 $product20 = sid('product-BELIQ-SMOKE-20');
+$product0 = sid('product-BELIQ-SMOKE-0');
 
 $germanSeller = [
     'sellerName' => 'Muster Handel GmbH',
@@ -337,6 +352,21 @@ $cases = [
         'mediaType' => 'application/pdf',
         'validateFormat' => 'auto',
     ],
+    'German XRechnung, VAT exempt (xml)' => [
+        'config' => [
+            'standard' => 'xrechnung',
+            'output' => 'xml',
+            'zeroRateCategory' => 'E',
+            'exemptReasonCode' => 'VATEX-EU-132',
+            'exemptReasonText' => 'Exempt under Article 132 of Directive 2006/112/EC',
+        ] + $germanSeller,
+        'product' => $product0,
+        'buyer' => $germanBuyer,
+        'magic' => '<?xml',
+        'mediaType' => 'application/xml',
+        'validateFormat' => 'cii',
+        'exemptionReason' => ['VATEX-EU-132', 'Exempt under Article 132 of Directive 2006/112/EC'],
+    ],
 ];
 
 $base = [
@@ -347,6 +377,10 @@ $base = [
     'businessOnly' => true,
     'triggerEvent' => 'paid',
     'zeroRateCategory' => 'Z',
+    'exemptReasonCode' => '',
+    'exemptReasonText' => '',
+    'exportReasonCode' => '',
+    'exportReasonText' => '',
     'paymentMeansCode' => '58',
 ];
 $client = new BeliqClient($apiKey, $baseUrl, new CurlHttpClient(120));
@@ -355,11 +389,12 @@ $firstOrder = null;
 foreach ($cases as $label => $case) {
     echo "\n== Case: {$label} ==\n";
     try {
-        configure($base + $case['config']);
+        configure(array_merge($base, $case['config']));
         $order = placeOrder($shop, $case['product'], 2, $case['buyer']);
         $firstOrder ??= $order;
         check(beliqDocuments($order['id']) === [], 'no beliq document before the payment (order ' . $order['number'] . ')');
 
+        $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
         transition($order['id'], 'paid');
 
         $documents = beliqDocuments($order['id']);
@@ -370,6 +405,23 @@ foreach ($cases as $label => $case) {
         }
         $document = $documents[0];
         check(($document['config']['documentNumber'] ?? null) === $order['number'], 'the document number is the order number');
+
+        // The stub stores a placeholder, so in a stub run the request is what
+        // shows the reason reached beliq. Against the API, validate checks BR-E-10.
+        if ($stub) {
+            // The last body is this case's only if the paid transition made one call.
+            check(stubGenerateCount($baseUrl) === $generatesBefore + 1, 'the paid transition made one generate call');
+            $summary = stubLastGenerate($baseUrl)['invoice']['taxSummary'] ?? [];
+            $sent = array_map(
+                static fn (array $row): array => [$row['vatCategoryCode'] ?? null, $row['exemptionReasonCode'] ?? null, $row['exemptionReasonText'] ?? null],
+                $summary,
+            );
+            $expected = isset($case['exemptionReason'])
+                ? [['E', ...$case['exemptionReason']]]
+                : array_map(static fn (array $row): array => [$row[0], null, null], $sent);
+            check($sent !== [] && $sent === $expected, 'the generate request\'s VAT breakdown carries '
+                . (isset($case['exemptionReason']) ? 'the configured exemption reason' : 'no exemption reason') . ' (' . json_encode($sent) . ')');
+        }
 
         // The admin's Documents card asks for the stored file's own type.
         $documentUrl = SHOP . '/api/_action/document/' . $document['id'] . '/' . $document['deepLinkCode'];
@@ -416,6 +468,22 @@ try {
     check(!array_key_exists(FAILURE_FIELD, orderCustomFields($consumer['id'])), 'the skip is not recorded as a failure');
 } catch (Throwable $e) {
     check(false, 'the consumer case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: a VAT exempt order with no exemption reason gets no invoice ==\n";
+try {
+    configure(array_merge($base, $cases['German XRechnung (xml)']['config'], ['zeroRateCategory' => 'E']));
+    $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+    $exempt = placeOrder($shop, $product0, 1, $germanBuyer);
+    transition($exempt['id'], 'paid');
+    check(beliqDocuments($exempt['id']) === [], 'no beliq document for the order');
+    $failure = (string) (orderCustomFields($exempt['id'])[FAILURE_FIELD] ?? '');
+    check(str_contains($failure, 'VAT category E') && str_contains($failure, 'BR-E-10'), 'the failure on the order names category E and BR-E-10 (' . $failure . ')');
+    if ($stub) {
+        check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call');
+    }
+} catch (Throwable $e) {
+    check(false, 'the missing-reason case raised ' . $e->getMessage());
 }
 
 echo "\n== Case: a second paid transition keeps the document, a manual one adds -2 ==\n";

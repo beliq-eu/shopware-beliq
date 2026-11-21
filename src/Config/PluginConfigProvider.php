@@ -3,6 +3,7 @@
 namespace Beliq\Shopware\Config;
 
 use Beliq\Shopware\Invoice\Address;
+use Beliq\Shopware\Invoice\ExemptionReason;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\PaymentMeans;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -25,6 +26,16 @@ final class PluginConfigProvider
     private const TRIGGER_PAID = 'state_enter.order_transaction.state.paid';
     private const TRIGGER_COMPLETED = 'state_enter.order.state.completed';
 
+    /**
+     * The settings that hold the exemption reason (BT-121 code, BT-120 text) of
+     * each VAT category the zero-rate setting offers that needs one: E (BR-E-10)
+     * and G (BR-G-10). Z must not carry one (BR-Z-10).
+     */
+    private const EXEMPTION_REASON_KEYS = [
+        'E' => ['exemptReasonCode', 'exemptReasonText'],
+        'G' => ['exportReasonCode', 'exportReasonText'],
+    ];
+
     /** UNTDID 4461 credit-transfer payment means. 58 is SEPA credit transfer. */
     private const PAYMENT_MEANS_CODES = ['58', '30'];
     private const DEFAULT_PAYMENT_MEANS_CODE = '58';
@@ -42,6 +53,7 @@ final class PluginConfigProvider
             'sellerEmail', 'sellerContactName', 'sellerPhone',
             'sellerStreet', 'sellerPostalCode', 'sellerCity', 'sellerCountryCode',
             'paymentMeansCode', 'sellerIban', 'sellerBic', 'sellerBankName',
+            'exemptReasonCode', 'exemptReasonText', 'exportReasonCode', 'exportReasonText',
         ];
 
         $values = [];
@@ -117,6 +129,15 @@ final class PluginConfigProvider
             bankName: $nullable('sellerBankName'),
         );
 
+        $exemptionReasons = [];
+        foreach (self::EXEMPTION_REASON_KEYS as $category => [$codeKey, $textKey]) {
+            $code = $nullable($codeKey);
+            $text = $nullable($textKey);
+            if ($code !== null || $text !== null) {
+                $exemptionReasons[$category] = new ExemptionReason($code, $text);
+            }
+        }
+
         return new PluginConfig(
             enabled: $bool('enabled', false),
             apiKey: $str('apiKey'),
@@ -129,6 +150,7 @@ final class PluginConfigProvider
             zeroRateCategory: $str('zeroRateCategory', self::DEFAULT_ZERO_RATE_CATEGORY),
             seller: $seller,
             paymentMeans: $paymentMeans,
+            exemptionReasons: $exemptionReasons,
         );
     }
 }

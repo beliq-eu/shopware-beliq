@@ -2,7 +2,9 @@
 
 namespace Beliq\Shopware\Tests;
 
+use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Invoice\Address;
+use Beliq\Shopware\Invoice\ExemptionReason;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\PaymentMeans;
 use Beliq\Shopware\Invoice\SourceLine;
@@ -98,11 +100,102 @@ final class InvoiceMapperTest extends TestCase
         self::assertEqualsWithDelta(500.0, $invoice['totalGrossAmount'], 0.001);
     }
 
+    public function testExemptBreakdownCarriesTheConfiguredReason(): void
+    {
+        $order = $this->order(
+            [
+                new SourceLine('Taxed', 1.0, 100.0, 100.0, 19.0),
+                new SourceLine('Exempt', 1.0, 500.0, 500.0, 0.0),
+            ],
+            [
+                'zeroRateCategory' => 'E',
+                'exemptionReasons' => [
+                    'E' => new ExemptionReason('VATEX-EU-132', 'Exempt under Article 132'),
+                    'S' => new ExemptionReason('VATEX-EU-O', 'never sent'),
+                ],
+            ],
+        );
+
+        $summary = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice']['taxSummary'];
+
+        self::assertSame('E', $summary[0]['vatCategoryCode']);
+        self::assertSame('VATEX-EU-132', $summary[0]['exemptionReasonCode']);
+        self::assertSame('Exempt under Article 132', $summary[0]['exemptionReasonText']);
+        self::assertSame('S', $summary[1]['vatCategoryCode']);
+        self::assertArrayNotHasKey('exemptionReasonCode', $summary[1]);
+        self::assertArrayNotHasKey('exemptionReasonText', $summary[1]);
+    }
+
+    public function testAReasonWithOnlyATextSendsOnlyTheText(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Export', 1.0, 500.0, 500.0, 0.0)],
+            ['zeroRateCategory' => 'G', 'exemptionReasons' => ['G' => new ExemptionReason(null, 'Export outside the EU')]],
+        );
+
+        $summary = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice']['taxSummary'];
+
+        self::assertSame('Export outside the EU', $summary[0]['exemptionReasonText']);
+        self::assertArrayNotHasKey('exemptionReasonCode', $summary[0]);
+    }
+
+    public function testZeroRatedBreakdownNeverCarriesAReason(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Zero-rated', 1.0, 500.0, 500.0, 0.0)],
+            ['zeroRateCategory' => 'Z', 'exemptionReasons' => ['Z' => new ExemptionReason('VATEX-EU-132', 'x')]],
+        );
+
+        $summary = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice']['taxSummary'];
+
+        self::assertArrayNotHasKey('exemptionReasonCode', $summary[0]);
+        self::assertArrayNotHasKey('exemptionReasonText', $summary[0]);
+    }
+
+    public function testExemptLinesWithoutAReasonStopWithTheRuleNamed(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Exempt', 1.0, 500.0, 500.0, 0.0)],
+            ['zeroRateCategory' => 'E', 'exemptionReasons' => ['G' => new ExemptionReason('VATEX-EU-G')]],
+        );
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Order INV-2026-001 has lines in VAT category E, which needs a VAT exemption reason code (BT-121) or text (BT-120) (BR-E-10).');
+        $this->mapper->toGenerateBody($order, 'xrechnung');
+    }
+
+    public function testACategoryWithNoSettingSaysSo(): void
+    {
+        $order = $this->order([new SourceLine('Reverse charge', 1.0, 500.0, 500.0, 0.0, 'C62', 'AE')]);
+
+        try {
+            $this->mapper->toGenerateBody($order, 'xrechnung');
+            self::fail('no exception');
+        } catch (MissingOrderDataException $e) {
+            self::assertStringContainsString('(BR-AE-10)', $e->getMessage());
+            self::assertStringContainsString('for categories E and G only', $e->getMessage());
+            self::assertStringNotContainsString('Set the exemption reason for category AE', $e->getMessage());
+        }
+    }
+
+    public function testAnEmptyReasonCountsAsMissing(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Export', 1.0, 500.0, 500.0, 0.0)],
+            ['zeroRateCategory' => 'G', 'exemptionReasons' => ['G' => new ExemptionReason('', '')]],
+        );
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('(BR-G-10)');
+        $this->mapper->toGenerateBody($order, 'xrechnung');
+    }
+
     public function testExplicitLineCategoryWins(): void
     {
-        $order = $this->order([
-            new SourceLine('Reverse charge', 1.0, 500.0, 500.0, 0.0, 'C62', 'AE'),
-        ]);
+        $order = $this->order(
+            [new SourceLine('Reverse charge', 1.0, 500.0, 500.0, 0.0, 'C62', 'AE')],
+            ['exemptionReasons' => ['AE' => new ExemptionReason('VATEX-EU-AE')]],
+        );
 
         $invoice = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice'];
 
@@ -246,6 +339,7 @@ final class InvoiceMapperTest extends TestCase
             note: $overrides['note'] ?? null,
             buyerFlaggedBusiness: $overrides['buyerFlaggedBusiness'] ?? false,
             zeroRateCategory: $overrides['zeroRateCategory'] ?? 'Z',
+            exemptionReasons: $overrides['exemptionReasons'] ?? [],
         );
     }
 }

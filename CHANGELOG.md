@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- 0% lines in VAT category `E` (exempt) or `G` (export outside the EU) now
+  carry a VAT exemption reason, which EN 16931 requires for both (BR-E-10,
+  BR-G-10). Four new settings hold a VATEX code (BT-121) and a text (BT-120)
+  for each category, and the plugin sends what you enter on that category's
+  VAT breakdown. Without a reason for the category in use, the order gets no
+  invoice and no beliq call is made; the failure on the order names the
+  category and the rule. Up to 0.2.5 these invoices went to beliq without a
+  reason. Category `Z`, the default, is unchanged.
+
 ## 0.2.5 (2026-11-21)
 
 - The German half of the Preview notice reads more naturally. The English half
