@@ -33,7 +33,7 @@ final class MissingOrderDataException extends \RuntimeException
     public static function taxFreeOrder(string $order): self
     {
         return new self(sprintf(
-            'Shopware marked order %s as tax free, and the plugin cannot tell which VAT category applies (intra-community supply K, export G or reverse charge AE), so it generates no e-invoice for the order.',
+            'Shopware marked order %s as tax free, and the plugin cannot tell which VAT category applies (for example intra-community supply K, export G or reverse charge AE), so it generates no e-invoice for the order.',
             $order,
         ));
     }

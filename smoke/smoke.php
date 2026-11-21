@@ -491,8 +491,11 @@ echo "\n== Case: a tax-free order gets no invoice ==\n";
 // a shop selling to intra-EU businesses sets it up. Shopware then records the
 // order as tax free without a VAT ground, so no category can be named for it.
 // Category E with its reason is set: up to 0.2.6 this order validated as exempt.
-$austria = $shop['countries']['AT'];
+$austria = $shop['countries']['AT'] ?? null;
 try {
+    if ($austria === null) {
+        throw new RuntimeException('the country search returned no AT');
+    }
     configure(array_merge($base, $cases['German XRechnung, VAT exempt (xml)']['config']));
     admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => true, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
     $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
@@ -510,7 +513,13 @@ try {
 } catch (Throwable $e) {
     check(false, 'the tax-free case raised ' . $e->getMessage());
 } finally {
-    admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => false, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
+    if ($austria !== null) {
+        try {
+            admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => false, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
+        } catch (Throwable $e) {
+            check(false, 'restoring Austria\'s company tax setting raised ' . $e->getMessage());
+        }
+    }
 }
 
 echo "\n== Case: a second paid transition keeps the document, a manual one adds -2 ==\n";

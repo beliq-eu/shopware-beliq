@@ -89,8 +89,9 @@ category and the rule, and no beliq call is made. The category and its reason
 apply to every 0% line of an order that Shopware does not mark tax free.
 
 An order Shopware marks tax free gets no invoice. Shopware records that it
-charged no VAT, not why, and intra-community supply (`K`), export (`G`) and
-reverse charge (`AE`) each need their own category and exemption reason. The
+charged no VAT, not why, and the grounds it can stand for, such as
+intra-community supply (`K`), export (`G`) or reverse charge (`AE`), each need
+their own category and exemption reason. The
 failure on the order says so, and no beliq call is made.
 
 ## Install
