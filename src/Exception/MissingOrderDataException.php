@@ -25,14 +25,19 @@ final class MissingOrderDataException extends \RuntimeException
         ));
     }
 
-    public static function exemptionReason(string $order, string $category, string $rule): self
+    /**
+     * @param bool $configurable whether the plugin settings hold a reason for this category
+     */
+    public static function exemptionReason(string $order, string $category, string $rule, bool $configurable): self
     {
         return new self(sprintf(
-            'Order %s has lines in VAT category %s, which needs a VAT exemption reason code (BT-121) or text (BT-120) (%s). Set the exemption reason for category %s in the plugin settings, then generate the invoice again.',
+            'Order %s has lines in VAT category %s, which needs a VAT exemption reason code (BT-121) or text (BT-120) (%s). %s',
             $order,
             $category,
             $rule,
-            $category,
+            $configurable
+                ? sprintf('Set the exemption reason for category %s in the plugin settings, then generate the invoice again.', $category)
+                : 'The plugin settings hold an exemption reason for categories E and G only.',
         ));
     }
 

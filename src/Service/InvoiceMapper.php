@@ -40,6 +40,9 @@ final class InvoiceMapper
         'O' => 'BR-O-10',
     ];
 
+    /** The categories PluginConfigProvider reads a reason for. */
+    private const CONFIGURABLE_REASONS = ['E', 'G'];
+
     /**
      * @return array<string, mixed> the JSON body for POST /v1/generate
      */
@@ -188,7 +191,12 @@ final class InvoiceMapper
 
         $reason = ($order->exemptionReasons[$category] ?? null)?->toArray() ?? [];
         if ($reason === []) {
-            throw MissingOrderDataException::exemptionReason($order->number, $category, $rule);
+            throw MissingOrderDataException::exemptionReason(
+                $order->number,
+                $category,
+                $rule,
+                in_array($category, self::CONFIGURABLE_REASONS, true),
+            );
         }
 
         return $reason;

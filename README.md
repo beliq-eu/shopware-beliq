@@ -85,7 +85,8 @@ forbids one for `Z` (BR-Z-10) and `S` (BR-S-10). The settings hold one reason
 for `E` and one for `G`, and the plugin sends it as you enter it on the VAT
 breakdown of that category. An order with lines in `E` or `G` and no reason
 set for that category gets no invoice: the failure on the order names the
-category and the rule, and no beliq call is made.
+category and the rule, and no beliq call is made. The category and its reason
+apply to every 0% line, the lines of an order Shopware marks tax free included.
 
 ## Install
 

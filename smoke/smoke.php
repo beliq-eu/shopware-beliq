@@ -394,6 +394,7 @@ foreach ($cases as $label => $case) {
         $firstOrder ??= $order;
         check(beliqDocuments($order['id']) === [], 'no beliq document before the payment (order ' . $order['number'] . ')');
 
+        $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
         transition($order['id'], 'paid');
 
         $documents = beliqDocuments($order['id']);
@@ -408,6 +409,8 @@ foreach ($cases as $label => $case) {
         // The stub stores a placeholder, so in a stub run the request is what
         // shows the reason reached beliq. Against the API, validate checks BR-E-10.
         if ($stub) {
+            // The last body is this case's only if the paid transition made one call.
+            check(stubGenerateCount($baseUrl) === $generatesBefore + 1, 'the paid transition made one generate call');
             $summary = stubLastGenerate($baseUrl)['invoice']['taxSummary'] ?? [];
             $sent = array_map(
                 static fn (array $row): array => [$row['vatCategoryCode'] ?? null, $row['exemptionReasonCode'] ?? null, $row['exemptionReasonText'] ?? null],

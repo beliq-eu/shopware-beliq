@@ -164,6 +164,20 @@ final class InvoiceMapperTest extends TestCase
         $this->mapper->toGenerateBody($order, 'xrechnung');
     }
 
+    public function testACategoryWithNoSettingSaysSo(): void
+    {
+        $order = $this->order([new SourceLine('Reverse charge', 1.0, 500.0, 500.0, 0.0, 'C62', 'AE')]);
+
+        try {
+            $this->mapper->toGenerateBody($order, 'xrechnung');
+            self::fail('no exception');
+        } catch (MissingOrderDataException $e) {
+            self::assertStringContainsString('(BR-AE-10)', $e->getMessage());
+            self::assertStringContainsString('for categories E and G only', $e->getMessage());
+            self::assertStringNotContainsString('Set the exemption reason for category AE', $e->getMessage());
+        }
+    }
+
     public function testAnEmptyReasonCountsAsMissing(): void
     {
         $order = $this->order(
