@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.5 (2026-11-21)
 
 - The German half of the Preview notice reads more naturally. The English half
   and what the Preview does are unchanged.
