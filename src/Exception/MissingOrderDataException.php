@@ -26,6 +26,19 @@ final class MissingOrderDataException extends \RuntimeException
     }
 
     /**
+     * Shopware's tax detector marks an order tax free from the shipping country's
+     * settings (tax free for every customer, or for companies), not from a VAT
+     * ground, so the order does not say which category applies.
+     */
+    public static function taxFreeOrder(string $order): self
+    {
+        return new self(sprintf(
+            'Shopware marked order %s as tax free, and the plugin cannot tell which VAT category applies (for example intra-community supply K, export G or reverse charge AE), so it generates no e-invoice for the order.',
+            $order,
+        ));
+    }
+
+    /**
      * @param bool $configurable whether the plugin settings hold a reason for this category
      */
     public static function exemptionReason(string $order, string $category, string $rule, bool $configurable): self
