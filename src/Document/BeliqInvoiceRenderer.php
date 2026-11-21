@@ -43,9 +43,9 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         . "The plugin does not generate a preview: each document beliq generates counts\n"
         . "toward the documents per month of your beliq plan. Create the document to see it.\n\n"
         . "beliq-Rechnung: keine Vorschau\n\n"
-        . "Das Plugin erstellt keine Vorschau: Jedes Dokument, das beliq erstellt, zählt zu\n"
-        . "den Dokumenten pro Monat Ihres beliq-Tarifs. Erstellen Sie das Dokument, um es\n"
-        . "zu sehen.\n";
+        . "Das Plugin erstellt keine Vorschau: Jedes von beliq erstellte Dokument wird auf\n"
+        . "die monatliche Dokumentenanzahl Ihres beliq-Tarifs angerechnet. Erstellen Sie das\n"
+        . "Dokument, um es anzuzeigen.\n";
 
     /**
      * @param EntityRepository<OrderCollection> $orderRepository

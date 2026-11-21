@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The German half of the Preview notice reads more naturally. The English half
+  and what the Preview does are unchanged.
+
 ## 0.2.4 (2026-11-21)
 
 - The Preview button of the admin's create-document dialog no longer calls
