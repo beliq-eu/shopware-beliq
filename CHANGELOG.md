@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- The Preview button of the admin's create-document dialog no longer calls
+  beliq. It called generate, which counts toward the documents per month of
+  the beliq plan, for a document that was never stored. The preview now runs
+  the plugin's own checks only: an order the create would refuse shows the
+  same error, and any other order gets a short text notice that says why there
+  is no preview and asks to create the document instead.
+- A document created again by hand takes one more than the highest number on
+  the order (`10000-4` after `10000` and `10000-3`), where it took one more
+  than the number of documents. After a merchant deleted a beliq document,
+  that count could give a number still in use, and the create failed with
+  "Document number already exists".
+
 ## 0.2.3 (2026-11-21)
 
 - Reading a stored XML beliq invoice as PDF no longer calls beliq again. PDF

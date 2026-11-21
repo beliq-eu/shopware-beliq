@@ -16,7 +16,10 @@ use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTax;
 use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTaxCollection;
 use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
+use Shopware\Core\Checkout\Document\DocumentCollection;
+use Shopware\Core\Checkout\Document\DocumentEntity;
 use Shopware\Core\Checkout\Document\Renderer\DocumentRendererConfig;
+use Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation;
 use Shopware\Core\Checkout\Order\Aggregate\OrderAddress\OrderAddressEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryCollection;
 use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryEntity;
@@ -31,7 +34,6 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\Currency\CurrencyEntity;
@@ -99,7 +101,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         // One beliq invoice already exists for the order. A regenerate must not reuse
         // SW10042 (Shopware rejects a duplicate document number), so it takes the next
         // distinct number instead of failing.
-        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingCount: 1)
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingNumbers: ['SW10042'])
             ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
 
         $doc = $result->getOrderSuccess($order->getId());
@@ -107,6 +109,80 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame('SW10042-2', $doc->getNumber());
         self::assertSame('invoice-SW10042-2', $doc->getName());
         self::assertSame('SW10042-2', $doc->getConfig()['documentNumber'] ?? null);
+    }
+
+    public function testRegenerateAfterADeletedDocumentTakesANumberNoDocumentHolds(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+
+        // SW10042, SW10042-2 and SW10042-3 were created, then SW10042-2 was
+        // deleted. Two documents remain, so counting them gives SW10042-3, which
+        // Shopware rejects as a duplicate.
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingNumbers: ['SW10042', 'SW10042-3'])
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderError($order->getId()));
+        $doc = $result->getOrderSuccess($order->getId());
+        self::assertNotNull($doc);
+        self::assertSame('SW10042-4', $doc->getNumber());
+        self::assertSame('SW10042-4', $doc->getConfig()['documentNumber'] ?? null);
+    }
+
+    public function testThePreviewIsALocalNoticeAndMakesNoBeliqCall(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10051');
+
+        // What DocumentController::previewDocument sends for the Preview button of
+        // the admin's create-document dialog.
+        $operation = new DocumentGenerateOperation($order->getId(), 'pdf', [], null, false, true);
+
+        $result = $this->renderer($order, $this->config('xrechnung', 'xml'), $http)
+            ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame([], $http->calls, 'a preview must not bill a beliq generate');
+        $doc = $result->getOrderSuccess($order->getId());
+        self::assertNotNull($doc, 'without a result Shopware shows the merchant a generation error');
+        self::assertSame(BeliqInvoiceRenderer::PREVIEW_NOTICE, $doc->getContent());
+        self::assertSame('text/plain; charset=utf-8', $doc->getContentType());
+    }
+
+    public function testThePreviewOfAnOrderTheCreateWouldSkipIsNoNotice(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->privateOrder('SW10052');
+        $operation = new DocumentGenerateOperation($order->getId(), 'pdf', [], null, false, true);
+
+        // A notice would ask the merchant to create a document that the
+        // business-only setting then skips.
+        $result = $this->renderer($order, $this->config('zugferd', 'xml', businessOnly: true), $http)
+            ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        self::assertSame([], $http->calls);
+    }
+
+    public function testThePreviewOfAnOrderMissingDataShowsTheMissingValue(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->businessOrder('SW10053');
+        $order->setShippingCosts(new CalculatedPrice(
+            4.95,
+            4.95,
+            new CalculatedTaxCollection([new CalculatedTax(0.79, 19.0, 4.95)]),
+            new TaxRuleCollection(),
+        ));
+        $operation = new DocumentGenerateOperation($order->getId(), 'pdf', [], null, false, true);
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+            ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        $error = $result->getOrderError($order->getId());
+        self::assertNotNull($error, 'the create would fail, so the preview says why');
+        self::assertStringContainsString('no delivery that carries them', $error->getMessage());
+        self::assertSame([], $http->calls);
     }
 
     public function testAStoredDocumentIsNotRenderedAgainForAnotherFileType(): void
@@ -119,7 +195,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         $operation = $this->operation($order->getId(), 'pdf');
         $operation->setDocumentId('0196f4b2c1a07d3e9b5a8c2f4e6d1b02');
 
-        $result = $this->renderer($order, $this->config('xrechnung', 'xml'), $http, existingCount: 1)
+        $result = $this->renderer($order, $this->config('xrechnung', 'xml'), $http, existingNumbers: ['SW10048'])
             ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
 
         self::assertNull($result->getOrderSuccess($order->getId()), 'a stored document must not be replaced');
@@ -286,13 +362,14 @@ final class BeliqInvoiceRendererTest extends TestCase
     }
 
     /**
+     * @param list<string> $existingNumbers numbers of the beliq documents already on the order
      * @param EntityRepository<OrderCollection>|null $orderRepository
      */
     private function renderer(
         OrderEntity $order,
         PluginConfigProvider $configProvider,
         FakeHttpClient $http,
-        int $existingCount = 0,
+        array $existingNumbers = [],
         ?EntityRepository $orderRepository = null,
     ): BeliqInvoiceRenderer {
         if ($orderRepository === null) {
@@ -314,7 +391,7 @@ final class BeliqInvoiceRendererTest extends TestCase
             $configProvider,
             new OrderAdapter(),
             new InvoiceMapper(),
-            $this->lookup($existingCount),
+            $this->lookup($existingNumbers),
             $http,
         );
     }
@@ -371,19 +448,38 @@ final class BeliqInvoiceRendererTest extends TestCase
         return $repository;
     }
 
-    private function lookup(int $count): InvoiceDocumentLookup
+    /**
+     * @param list<string> $numbers
+     */
+    private function lookup(array $numbers): InvoiceDocumentLookup
     {
+        $documents = [];
+        foreach ($numbers as $number) {
+            $document = new DocumentEntity();
+            $document->setId(Uuid::randomHex());
+            $document->setUniqueIdentifier($document->getId());
+            $document->setDocumentNumber($number);
+            $documents[] = $document;
+        }
+
         $documentRepository = $this->createMock(EntityRepository::class);
-        $documentRepository->method('searchIds')->willReturnCallback(
-            static fn (Criteria $criteria, Context $context): IdSearchResult => new IdSearchResult($count, [], $criteria, $context),
+        $documentRepository->method('search')->willReturnCallback(
+            static fn (Criteria $criteria, Context $context): EntitySearchResult => new EntitySearchResult(
+                'document',
+                count($documents),
+                new DocumentCollection($documents),
+                null,
+                $criteria,
+                $context,
+            ),
         );
 
         return new InvoiceDocumentLookup($documentRepository);
     }
 
-    private function operation(string $orderId, string $fileType): \Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation
+    private function operation(string $orderId, string $fileType): DocumentGenerateOperation
     {
-        return new \Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation($orderId, $fileType);
+        return new DocumentGenerateOperation($orderId, $fileType);
     }
 
     /**
