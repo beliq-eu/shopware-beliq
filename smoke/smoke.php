@@ -45,7 +45,7 @@ function check(bool $cond, string $label): void
     }
 }
 
-/** @return array{status: int, type: string, body: string} */
+/** @return array{status: int, type: string, headers: array<string, string>, body: string} */
 function http(string $method, string $url, array $headers, ?string $body = null): array
 {
     $responseHeaders = [];
@@ -80,10 +80,15 @@ function http(string $method, string $url, array $headers, ?string $body = null)
     ];
 }
 
+// Shopware's admin access token lasts 10 minutes, and a slow run can outlast one.
+const TOKEN_REUSE_SECONDS = 300;
+
 function adminToken(): string
 {
     static $token = null;
-    if ($token === null) {
+    static $fetchedAt = 0;
+    if ($token === null || time() - $fetchedAt > TOKEN_REUSE_SECONDS) {
+        $fetchedAt = time();
         $res = http('POST', SHOP . '/api/oauth/token', ['Content-Type: application/json'], json_encode([
             'grant_type' => 'password',
             'client_id' => 'administration',

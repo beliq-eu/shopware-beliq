@@ -65,7 +65,10 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
             // file type the document has no media for, and its default is pdf. The
             // stored document is what beliq returned for the order, so rendering it
             // again would bill a second generate and rewrite its number to the
-            // regenerate form. Returning nothing gives that reader a 204.
+            // regenerate form. Returning nothing gives that reader a 204. It also
+            // means a stored document whose file was lost is never rebuilt under
+            // its number: the buyer may hold the original, so a new document,
+            // created by hand, takes the next number instead.
             if ($operation->getDocumentId() !== null) {
                 continue;
             }

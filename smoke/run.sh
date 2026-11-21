@@ -8,8 +8,8 @@
 #   ./run.sh down      # tear the stack down and wipe its volumes
 #
 # BELIQ_BASE_URL is resolved from inside the container, so a beliq API on this
-# machine is http://host.docker.internal:<port>. The preflight rewrites that
-# host back to localhost before probing. The stack is left up after a run.
+# machine is http://host.docker.internal:<port>. That name resolves to the
+# default Docker bridge's gateway, which the preflight probes in its place. The stack is left up after a run.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -17,8 +17,11 @@ cd "$(dirname "$0")"
 SHOP_URL="http://localhost:8090"
 DC="docker compose --project-directory . -p beliq-shopware-smoke"
 PLUGIN_DIR=/var/www/html/custom/plugins/BeliqShopware
-# The files a merchant installs: what .gitattributes leaves in the archive.
-SHIPPED="composer.json src README.md CHANGELOG.md LICENSE"
+# The files a merchant installs: the top-level paths .gitattributes leaves in
+# the archive.
+SHIPPED=$(git -C .. ls-files | cut -d/ -f1 | sort -u \
+    | git -C .. check-attr --stdin export-ignore | awk -F': ' '$3 != "set" {print $1}' | tr '\n' ' ')
+BRIDGE_GATEWAY=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
 
 if [[ "${1:-}" == "down" ]]; then
     $DC down -v
@@ -28,21 +31,23 @@ fi
 export BELIQ_SMOKE_STUB=0
 if [[ "${1:-}" == "stub" ]]; then
     STUB_PORT="${BELIQ_STUB_PORT:-8096}"
-    php -S "0.0.0.0:$STUB_PORT" stub-router.php >/dev/null 2>&1 &
+    # Listening on the gateway and not on every interface keeps the stub off the LAN.
+    php -S "$BRIDGE_GATEWAY:$STUB_PORT" stub-router.php >/dev/null 2>&1 &
     STUB_PID=$!
     trap 'kill "$STUB_PID" 2>/dev/null' EXIT
     export BELIQ_API_KEY=blq_stub
     export BELIQ_BASE_URL="http://host.docker.internal:$STUB_PORT"
     export BELIQ_SMOKE_STUB=1
-    echo "== Stub beliq API on :$STUB_PORT =="
+    echo "== Stub beliq API on $BRIDGE_GATEWAY:$STUB_PORT =="
 else
     : "${BELIQ_API_KEY:?export BELIQ_API_KEY (a key for the API that BELIQ_BASE_URL names)}"
     : "${BELIQ_BASE_URL:?export BELIQ_BASE_URL (https://api.beliq.eu for production)}"
+    BELIQ_BASE_URL="${BELIQ_BASE_URL%/}"
     export BELIQ_API_KEY BELIQ_BASE_URL
 fi
 
 echo "== Preflight: beliq API reachable =="
-PREFLIGHT_URL="${BELIQ_BASE_URL/host.docker.internal/localhost}/health/live"
+PREFLIGHT_URL="${BELIQ_BASE_URL/host.docker.internal/$BRIDGE_GATEWAY}/health/live"
 for _ in $(seq 1 10); do
     curl -fsS -m 10 "$PREFLIGHT_URL" >/dev/null 2>&1 && break
     sleep 1
