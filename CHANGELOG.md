@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- An order Shopware marks tax free gets no invoice. Shopware records that it
+  charged no VAT, not why, so the plugin cannot tell which VAT category
+  applies: intra-community supply (`K`), export outside the EU (`G`) or
+  reverse charge (`AE`). The failure on the order says so, and no beliq call
+  is made. Up to 0.2.6 such an order took the category set for 0% lines
+  (`Z` by default), and in 0.2.6 with `E` or `G` also that category's
+  exemption reason, so the invoice stated a VAT ground the shop had not.
+
 ## 0.2.6 (2026-11-21)
 
 - 0% lines in VAT category `E` (exempt) or `G` (export outside the EU) now

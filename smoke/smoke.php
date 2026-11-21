@@ -260,7 +260,7 @@ $channel = search('sales-channel', [
     'associations' => ['domains' => new stdClass()],
 ])[0];
 $countries = [];
-foreach (search('country', ['filter' => [['type' => 'equalsAny', 'field' => 'iso', 'value' => ['DE', 'FR']]]]) as $country) {
+foreach (search('country', ['filter' => [['type' => 'equalsAny', 'field' => 'iso', 'value' => ['DE', 'FR', 'AT']]]]) as $country) {
     $countries[$country['iso']] = $country['id'];
 }
 $shop = [
@@ -484,6 +484,33 @@ try {
     }
 } catch (Throwable $e) {
     check(false, 'the missing-reason case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: a tax-free order gets no invoice ==\n";
+// Austria's company tax setting makes a company buyer with a VAT ID tax free, as
+// a shop selling to intra-EU businesses sets it up. Shopware then records the
+// order as tax free without a VAT ground, so no category can be named for it.
+// Category E with its reason is set: up to 0.2.6 this order validated as exempt.
+$austria = $shop['countries']['AT'];
+try {
+    configure(array_merge($base, $cases['German XRechnung, VAT exempt (xml)']['config']));
+    admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => true, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
+    $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+    $taxFree = placeOrder($shop, $product19, 1, ['country' => 'AT', 'city' => 'Wien', 'zipcode' => '1010', 'company' => 'Kaeufer GmbH', 'vatId' => 'ATU12345678']);
+    $taxStatus = search('order', ['ids' => [$taxFree['id']]])[0]['taxStatus'] ?? null;
+    check($taxStatus === 'tax-free', 'Shopware recorded the order as tax free (got ' . json_encode($taxStatus) . ')');
+    transition($taxFree['id'], 'paid');
+    check(beliqDocuments($taxFree['id']) === [], 'no beliq document for the order');
+    $failure = (string) (orderCustomFields($taxFree['id'])[FAILURE_FIELD] ?? '');
+    // The field keeps 255 characters, so the end of the message shows it fits.
+    check(str_contains($failure, 'as tax free') && str_ends_with($failure, 'no e-invoice for the order.'), 'the failure on the order says the order is tax free, in full (' . $failure . ')');
+    if ($stub) {
+        check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call');
+    }
+} catch (Throwable $e) {
+    check(false, 'the tax-free case raised ' . $e->getMessage());
+} finally {
+    admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => false, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
 }
 
 echo "\n== Case: a second paid transition keeps the document, a manual one adds -2 ==\n";

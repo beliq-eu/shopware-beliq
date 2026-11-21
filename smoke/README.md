@@ -22,6 +22,9 @@ configured reason, and the others carry none. More cases:
 - a consumer order is skipped under the business-only setting;
 - an exempt order with no exemption reason set gets no document, a failure
   on the order that names category `E` and BR-E-10, and no generate call;
+- an order Shopware records as tax free (an Austrian company buyer with a VAT
+  ID, under Austria's company tax setting) gets no document, a failure on the
+  order that says it is tax free, and no generate call;
 - a second paid transition stores no second document;
 - creating the document by hand adds one numbered `<order>-2`;
 - after `<order>-3` is added and `<order>-2` deleted, a create by hand

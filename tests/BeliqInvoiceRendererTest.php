@@ -5,6 +5,7 @@ namespace Beliq\Shopware\Tests;
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
 use Beliq\Shopware\Document\InvoiceDocumentLookup;
+use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
 use Beliq\Shopware\Tests\Support\FakeHttpClient;
@@ -344,6 +345,40 @@ final class BeliqInvoiceRendererTest extends TestCase
             new CalculatedTaxCollection([new CalculatedTax(0.79, 19.0, 4.95)]),
             new TaxRuleCollection(),
         ));
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml', businessOnly: true), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        self::assertNull($result->getOrderError($order->getId()), 'skipping is a no-op, not an error');
+        self::assertSame([], $http->calls);
+    }
+
+    /**
+     * Shopware records that no VAT was charged, not why, so a tax-free order
+     * gets no invoice and beliq is not called.
+     */
+    public function testATaxFreeOrderIsARenderErrorWithoutCallingTheApi(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->businessOrder('SW10051');
+        $order->setTaxStatus(CartPrice::TAX_STATE_FREE);
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        $error = $result->getOrderError($order->getId());
+        self::assertInstanceOf(MissingOrderDataException::class, $error);
+        self::assertStringContainsString('Shopware marked order SW10051 as tax free', $error->getMessage());
+        self::assertSame([], $http->calls);
+    }
+
+    public function testATaxFreeOrderTheBusinessOnlySettingSkipsRecordsNoError(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->privateOrder('SW10052');
+        $order->setTaxStatus(CartPrice::TAX_STATE_FREE);
 
         $result = $this->renderer($order, $this->config('zugferd', 'xml', businessOnly: true), $http)
             ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());

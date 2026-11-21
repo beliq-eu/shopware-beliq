@@ -29,9 +29,11 @@ use Shopware\Core\Checkout\Order\OrderEntity;
  * order gives the new name on a later attempt or a regenerate.
  *
  * Line figures are converted to the net basis EN 16931 works in: Shopware reports
- * order figures in the order's tax status (gross, net, or tax-free), so a gross
- * order has its per-line tax subtracted back out. The seller comes from plugin
- * config, the buyer from the order's billing address and customer.
+ * order figures in the order's tax status, so a gross order has its per-line tax
+ * subtracted back out. An order Shopware marks tax free gets no invoice: Shopware
+ * records that no VAT was charged, not why, and the VAT category depends on why.
+ * The seller comes from plugin config, the buyer from the order's billing address
+ * and customer.
  */
 final class OrderAdapter
 {
@@ -44,6 +46,9 @@ final class OrderAdapter
     public function toSourceOrder(OrderEntity $order, PluginConfig $config): SourceOrder
     {
         $taxStatus = $order->getTaxStatus() ?? $order->getPrice()->getTaxStatus();
+        if ($taxStatus === CartPrice::TAX_STATE_FREE) {
+            throw MissingOrderDataException::taxFreeOrder($order->getOrderNumber() ?? $order->getId());
+        }
 
         $lines = [];
         foreach ($order->getLineItems() ?? [] as $item) {
@@ -148,14 +153,7 @@ final class OrderAdapter
         $taxes = $price->getCalculatedTaxes();
         $rate = $this->dominantRate($taxes);
 
-        if ($taxStatus === CartPrice::TAX_STATE_FREE) {
-            $net = $total;
-            $rate = 0.0;
-        } elseif ($taxStatus === CartPrice::TAX_STATE_GROSS) {
-            $net = $total - $taxes->getAmount();
-        } else {
-            $net = $total;
-        }
+        $net = $taxStatus === CartPrice::TAX_STATE_GROSS ? $total - $taxes->getAmount() : $total;
 
         return new SourceLine(
             description: $item->getLabel(),
@@ -186,7 +184,7 @@ final class OrderAdapter
         $name = $this->shippingMethodName($order);
 
         $taxes = $shipping->getCalculatedTaxes();
-        if ($taxStatus === CartPrice::TAX_STATE_FREE || $taxes->count() === 0) {
+        if ($taxes->count() === 0) {
             return [$this->shippingLine($name, $total, 0.0)];
         }
 

@@ -226,8 +226,8 @@
             <name>zeroRateCategory</name>
             <label>VAT category for 0% lines</label>
             <label lang="de-DE">USt-Kategorie für 0%-Positionen</label>
-            <helpText>The tax treatment for zero-rated lines is the merchant's call. It applies to every 0% line, those of orders Shopware marks tax free included. Reverse charge and intra-community supply are not auto-detected.</helpText>
-            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Sie gilt für jede 0%-Position, auch für die Positionen steuerfreier Bestellungen. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
+            <helpText>The tax treatment for zero-rated lines is the merchant's call. It applies to every 0% line of an order Shopware does not mark tax free. An order Shopware marks tax free gets no e-invoice, because Shopware does not record which VAT category applies. Reverse charge and intra-community supply are not auto-detected.</helpText>
+            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Sie gilt für jede 0%-Position einer Bestellung, die Shopware nicht als steuerfrei markiert. Für eine steuerfreie Bestellung wird keine E-Rechnung erstellt, weil Shopware nicht festhält, welche USt-Kategorie gilt. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
             <defaultValue>Z</defaultValue>
             <options>
                 <option>

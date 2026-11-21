@@ -86,7 +86,12 @@ for `E` and one for `G`, and the plugin sends it as you enter it on the VAT
 breakdown of that category. An order with lines in `E` or `G` and no reason
 set for that category gets no invoice: the failure on the order names the
 category and the rule, and no beliq call is made. The category and its reason
-apply to every 0% line, the lines of an order Shopware marks tax free included.
+apply to every 0% line of an order that Shopware does not mark tax free.
+
+An order Shopware marks tax free gets no invoice. Shopware records that it
+charged no VAT, not why, and intra-community supply (`K`), export (`G`) and
+reverse charge (`AE`) each need their own category and exemption reason. The
+failure on the order says so, and no beliq call is made.
 
 ## Install
 

@@ -93,7 +93,11 @@ final class OrderAdapterTest extends TestCase
         self::assertEqualsWithDelta(19.0, $source->lines[0]->vatRate, 0.001);
     }
 
-    public function testTaxFreeOrderYieldsZeroRate(): void
+    /**
+     * Shopware records that no VAT was charged, not why. Any one category would
+     * claim a legal ground the shop did not state.
+     */
+    public function testTaxFreeOrderStops(): void
     {
         $order = $this->order(
             taxStatus: CartPrice::TAX_STATE_FREE,
@@ -104,11 +108,9 @@ final class OrderAdapterTest extends TestCase
             billing: $this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', 'Overseas Inc'),
         );
 
-        $source = $this->adapter->toSourceOrder($order, $this->config());
-
-        self::assertEqualsWithDelta(300.0, $source->lines[0]->lineNetTotal, 0.001);
-        self::assertEqualsWithDelta(100.0, $source->lines[0]->unitNetPrice, 0.001);
-        self::assertEqualsWithDelta(0.0, $source->lines[0]->vatRate, 0.001);
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Shopware marked order SW10001 as tax free, and the plugin cannot tell which VAT category applies');
+        $this->adapter->toSourceOrder($order, $this->config());
     }
 
     /**
@@ -165,19 +167,6 @@ final class OrderAdapterTest extends TestCase
 
         self::assertEqualsWithDelta(5.0, $shipping->lineNetTotal, 0.001);
         self::assertEqualsWithDelta(19.0, $shipping->vatRate, 0.001);
-    }
-
-    public function testShippingOnATaxFreeOrderIsZeroRated(): void
-    {
-        $order = $this->businessOrder(
-            CartPrice::TAX_STATE_FREE,
-            $this->shipping(5.0, []),
-        );
-
-        $shipping = $this->adapter->toSourceOrder($order, $this->config())->lines[1];
-
-        self::assertEqualsWithDelta(5.0, $shipping->lineNetTotal, 0.001);
-        self::assertEqualsWithDelta(0.0, $shipping->vatRate, 0.001);
     }
 
     public function testFreeShippingAddsNoLine(): void
