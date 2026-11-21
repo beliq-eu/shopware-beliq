@@ -109,6 +109,24 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame('SW10042-2', $doc->getConfig()['documentNumber'] ?? null);
     }
 
+    public function testAStoredDocumentIsNotRenderedAgainForAnotherFileType(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10048');
+
+        // What DocumentGenerator::readDocument sends when an XML beliq invoice is
+        // read as pdf, the default of the Admin API download.
+        $operation = $this->operation($order->getId(), 'pdf');
+        $operation->setDocumentId('0196f4b2c1a07d3e9b5a8c2f4e6d1b02');
+
+        $result = $this->renderer($order, $this->config('xrechnung', 'xml'), $http, existingCount: 1)
+            ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()), 'a stored document must not be replaced');
+        self::assertNull($result->getOrderError($order->getId()), 'declining the re-render is not an error');
+        self::assertSame([], $http->calls, 'no second beliq generate for a document that exists');
+    }
+
     public function testXrechnungOmitsTheProfileInTheGenerateBody(): void
     {
         $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);

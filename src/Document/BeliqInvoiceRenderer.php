@@ -60,6 +60,16 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         $result = new RendererResult();
 
         foreach ($operations as $orderId => $operation) {
+            // A document id means Shopware is rendering a stored document again:
+            // DocumentGenerator::readDocument does that when a reader asks for a
+            // file type the document has no media for, and its default is pdf. The
+            // stored document is what beliq returned for the order, so rendering it
+            // again would bill a second generate and rewrite its number to the
+            // regenerate form. Returning nothing gives that reader a 204.
+            if ($operation->getDocumentId() !== null) {
+                continue;
+            }
+
             try {
                 $order = $this->loadOrder($operation->getOrderId(), $context);
                 if (!$order instanceof OrderEntity) {

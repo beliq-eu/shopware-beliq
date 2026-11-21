@@ -194,6 +194,9 @@ server (PHP's built-in one). A live smoke against
 `/v1/generate` and `/v1/validate` is gated on a `BELIQ_API_KEY` environment
 variable.
 
+`smoke/` runs the plugin inside a real Shopware 6.7 store (Dockware) and needs
+Docker. See [smoke/README.md](smoke/README.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
