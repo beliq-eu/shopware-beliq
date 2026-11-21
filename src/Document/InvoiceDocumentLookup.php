@@ -3,7 +3,6 @@
 namespace Beliq\Shopware\Document;
 
 use Shopware\Core\Checkout\Document\DocumentCollection;
-use Shopware\Core\Checkout\Document\DocumentEntity;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -49,11 +48,9 @@ final class InvoiceDocumentLookup
         $criteria->addFilter(new EqualsFilter('documentType.technicalName', BeliqInvoiceRenderer::TYPE));
 
         $suffix = '/^' . preg_quote($orderNumber, '/') . '-([1-9][0-9]*)$/D';
+        $documents = $this->documentRepository->search($criteria, $context)->getEntities();
         $highest = 0;
-        foreach ($this->documentRepository->search($criteria, $context)->getEntities() as $document) {
-            if (!$document instanceof DocumentEntity) {
-                continue;
-            }
+        foreach ($documents as $document) {
             $number = $document->getDocumentNumber();
             if ($number === $orderNumber) {
                 $highest = max($highest, 1);
