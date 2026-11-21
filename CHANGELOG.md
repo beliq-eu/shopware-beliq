@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.6 (2026-11-21)
 
 - 0% lines in VAT category `E` (exempt) or `G` (export outside the EU) now
   carry a VAT exemption reason, which EN 16931 requires for both (BR-E-10,
