@@ -103,6 +103,7 @@ final class OrderAdapter
             buyerReference: $this->buyerReference($order, $customer, $number),
             buyerFlaggedBusiness: $flaggedBusiness,
             zeroRateCategory: $config->zeroRateCategory,
+            exemptionReasons: $config->exemptionReasons,
         );
     }
 

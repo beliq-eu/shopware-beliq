@@ -5,10 +5,12 @@ namespace Beliq\Shopware\Tests;
 use Beliq\Shopware\Config\PluginConfig;
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Invoice\Address;
+use Beliq\Shopware\Invoice\ExemptionReason;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\SourceLine;
 use Beliq\Shopware\Invoice\SourceOrder;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 final class PluginConfigTest extends TestCase
 {
@@ -86,6 +88,46 @@ final class PluginConfigTest extends TestCase
         self::assertSame('DE89370400440532013000', $payment->iban);
         self::assertSame('COBADEFFXXX', $payment->bic);
         self::assertSame('Commerzbank', $payment->bankName);
+    }
+
+    public function testExemptionReasonsAreMappedPerCategory(): void
+    {
+        $config = PluginConfigProvider::fromValues([
+            'exemptReasonCode' => ' VATEX-EU-132 ',
+            'exemptReasonText' => '  ',
+            'exportReasonText' => 'Export outside the EU',
+        ]);
+
+        self::assertEquals([
+            'E' => new ExemptionReason('VATEX-EU-132', null),
+            'G' => new ExemptionReason(null, 'Export outside the EU'),
+        ], $config->exemptionReasons);
+    }
+
+    public function testDefaultsHaveNoExemptionReasons(): void
+    {
+        self::assertSame([], PluginConfigProvider::fromValues([])->exemptionReasons);
+    }
+
+    public function testGetReadsExactlyTheSettingsTheAdminOffers(): void
+    {
+        $xml = simplexml_load_file(__DIR__ . '/../src/Resources/config/config.xml');
+        self::assertNotFalse($xml);
+        $offered = array_map('strval', $xml->xpath('//input-field/name') ?: []);
+
+        $read = [];
+        $systemConfig = $this->createStub(SystemConfigService::class);
+        $systemConfig->method('get')->willReturnCallback(static function (string $key) use (&$read) {
+            $read[] = substr($key, strlen(PluginConfigProvider::DOMAIN));
+
+            return null;
+        });
+        (new PluginConfigProvider($systemConfig))->get();
+
+        self::assertSame([], array_values(array_diff($offered, $read)), 'offered in the admin but never read');
+        // The base URL has no admin field: it is set only through the system
+        // config, for a staging API or the smoke's stub.
+        self::assertSame(['baseUrl'], array_values(array_diff($read, $offered)));
     }
 
     public function testPaymentMeansIsNullWithoutIban(): void

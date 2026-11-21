@@ -244,5 +244,33 @@
                 </option>
             </options>
         </input-field>
+        <input-field type="text">
+            <name>exemptReasonCode</name>
+            <label>Exemption reason code for category E</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie E</label>
+            <helpText>A code from the VATEX code list (BT-121). An invoice with 0% lines in category E needs this code or the text below (BR-E-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121). Eine Rechnung mit 0%-Positionen der Kategorie E braucht diesen Code oder den Text darunter (BR-E-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>exemptReasonText</name>
+            <label>Exemption reason text for category E</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie E</label>
+            <helpText>Why the supply is exempt from VAT, in words (BT-120).</helpText>
+            <helpText lang="de-DE">Warum die Leistung von der Umsatzsteuer befreit ist, in Worten (BT-120).</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>exportReasonCode</name>
+            <label>Exemption reason code for category G</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie G</label>
+            <helpText>A code from the VATEX code list (BT-121) that means "Export outside the EU". An invoice with 0% lines in category G needs this code or the text below (BR-G-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Export outside the EU“. Eine Rechnung mit 0%-Positionen der Kategorie G braucht diesen Code oder den Text darunter (BR-G-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>exportReasonText</name>
+            <label>Exemption reason text for category G</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie G</label>
+            <helpText>The text "Export outside the EU", or the same standard text in another language (BT-120).</helpText>
+            <helpText lang="de-DE">Der Text „Export outside the EU“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
+        </input-field>
     </card>
 </config>

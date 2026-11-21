@@ -10,10 +10,16 @@ namespace Beliq\Shopware\Invoice;
  * zeroRateCategory is the VAT category used for lines taxed at 0%. It defaults to
  * Z (zero-rated). The merchant owns this choice. Reverse charge is not
  * auto-detected: a wrong guess in a compliance tool is worse than none.
+ *
+ * exemptionReasons holds the merchant's VAT exemption reason per VAT category
+ * code.
  */
 final readonly class SourceOrder
 {
-    /** @param list<SourceLine> $lines */
+    /**
+     * @param list<SourceLine> $lines
+     * @param array<string, ExemptionReason> $exemptionReasons
+     */
     public function __construct(
         public string $number,
         public string $issueDate,
@@ -29,6 +35,7 @@ final readonly class SourceOrder
         public ?string $note = null,
         public bool $buyerFlaggedBusiness = false,
         public string $zeroRateCategory = 'Z',
+        public array $exemptionReasons = [],
     ) {
     }
 

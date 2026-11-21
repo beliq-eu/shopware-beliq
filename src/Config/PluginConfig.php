@@ -2,6 +2,7 @@
 
 namespace Beliq\Shopware\Config;
 
+use Beliq\Shopware\Invoice\ExemptionReason;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\PaymentMeans;
 use Beliq\Shopware\Invoice\SourceOrder;
@@ -11,7 +12,8 @@ use Beliq\Shopware\Invoice\SourceOrder;
  * pre-assembled into a Party from the seller-legal fields (name, address, VAT/tax
  * ids, and the BG-6 contact); the seller's bank details become the paymentMeans
  * template. profile is null when the merchant leaves it blank, letting the engine
- * pick its default.
+ * pick its default. exemptionReasons holds the configured VAT exemption reason
+ * per VAT category code, only for categories the merchant gave one.
  */
 final readonly class PluginConfig
 {
@@ -34,6 +36,9 @@ final readonly class PluginConfig
      */
     private const XML_ONLY_STANDARDS = ['xrechnung', 'peppol-bis'];
 
+    /**
+     * @param array<string, ExemptionReason> $exemptionReasons
+     */
     public function __construct(
         public bool $enabled,
         public string $apiKey,
@@ -46,6 +51,7 @@ final readonly class PluginConfig
         public string $zeroRateCategory,
         public Party $seller,
         public ?PaymentMeans $paymentMeans = null,
+        public array $exemptionReasons = [],
     ) {
     }
 
