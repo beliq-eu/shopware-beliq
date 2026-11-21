@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.4 (2026-11-21)
 
 - The Preview button of the admin's create-document dialog no longer calls
   beliq. It called generate, which counts toward the documents per month of
