@@ -37,6 +37,16 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
     /** Technical name of the beliq document type (see the registering migration). */
     public const TYPE = 'beliq_invoice';
 
+    public const PREVIEW_NAME = 'beliq-invoice-preview.txt';
+
+    public const PREVIEW_NOTICE = "beliq invoice: no preview\n\n"
+        . "The plugin does not generate a preview: each document beliq generates counts\n"
+        . "toward the documents per month of your beliq plan. Create the document to see it.\n\n"
+        . "beliq-Rechnung: keine Vorschau\n\n"
+        . "Das Plugin erstellt keine Vorschau: Jedes Dokument, das beliq erstellt, zählt zu\n"
+        . "den Dokumenten pro Monat Ihres beliq-Tarifs. Erstellen Sie das Dokument, um es\n"
+        . "zu sehen.\n";
+
     /**
      * @param EntityRepository<OrderCollection> $orderRepository
      */
@@ -73,6 +83,23 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 continue;
             }
 
+            // The admin's create-document dialog asks for a preview before the
+            // merchant creates the document. A beliq generate counts toward the
+            // plan's documents per month, so the preview gets a local notice
+            // instead. Returning nothing would show the merchant an error.
+            if ($operation->isPreview()) {
+                $result->addSuccess($orderId, new RenderedDocument(
+                    '',
+                    self::PREVIEW_NAME,
+                    'txt',
+                    [],
+                    'text/plain; charset=utf-8',
+                    self::PREVIEW_NOTICE,
+                ));
+
+                continue;
+            }
+
             try {
                 $order = $this->loadOrder($operation->getOrderId(), $context);
                 if (!$order instanceof OrderEntity) {
@@ -96,14 +123,10 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     $config->effectiveProfile(),
                 );
 
+                $documentNumber = $this->documents->nextNumber($operation->getOrderId(), $source->number, $context);
+
                 $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
                 $generated = $client->generate($body);
-
-                // The first beliq document for an order takes the order number; a
-                // regenerate from the order's Documents card gets a distinct suffix,
-                // because Shopware rejects a duplicate document number.
-                $existing = $this->documents->countForOrder($operation->getOrderId(), $context);
-                $documentNumber = $existing === 0 ? $source->number : $source->number . '-' . ($existing + 1);
 
                 $isPdf = str_contains($generated['contentType'], 'pdf');
                 // The 6.7 signature. 6.6 has a leading `string $html` parameter, so

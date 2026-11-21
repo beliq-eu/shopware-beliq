@@ -18,7 +18,11 @@ Cases: German XRechnung (xml), French Peppol BIS (xml) and German ZUGFeRD
 posts its bytes to `/v1/validate`. Three more cases:
 - a consumer order is skipped under the business-only setting;
 - a second paid transition stores no second document;
-- creating the document by hand adds one numbered `<order>-2`.
+- creating the document by hand adds one numbered `<order>-2`;
+- after `<order>-3` is added and `<order>-2` deleted, a create by hand
+  succeeds as `<order>-4`;
+- the admin's Preview returns the plugin's local notice, stores nothing and,
+  in a stub run, makes no generate call.
 
 ## Run
 
@@ -29,7 +33,7 @@ BELIQ_API_KEY=... BELIQ_BASE_URL=https://api.beliq.eu ./run.sh
 ```
 
 `BELIQ_BASE_URL` is resolved inside the container, so an API on this machine is
-`http://host.docker.internal:<port>`. One run makes 4 generate and 3 validate
+`http://host.docker.internal:<port>`. One run makes 6 generate and 3 validate
 calls with the key.
 
 ```bash

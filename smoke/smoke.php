@@ -213,6 +213,17 @@ function transition(string $orderId, string $transition): void
     admin('POST', '/_action/order_transaction/' . $transactions[0]['id'] . '/state/' . $transition);
 }
 
+/** How many generate calls stub-router.php has answered. */
+function stubGenerateCount(string $baseUrl): int
+{
+    $res = http('GET', $baseUrl . '/__smoke/generate-count', []);
+    if ($res['status'] !== 200) {
+        throw new RuntimeException('stub generate count -> ' . $res['status']);
+    }
+
+    return (int) $res['body'];
+}
+
 function orderCustomFields(string $orderId): array
 {
     return search('order', ['ids' => [$orderId]])[0]['customFields'] ?? [];
@@ -425,6 +436,55 @@ try {
     check(($manual[1]['config']['documentNumber'] ?? null) === $firstOrder['number'] . '-2', 'the second document is numbered ' . $firstOrder['number'] . '-2');
 } catch (Throwable $e) {
     check(false, 'the idempotency case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: after a deleted document, a manual create takes a number no document holds ==\n";
+try {
+    if ($firstOrder === null) {
+        throw new RuntimeException('no order from the first case');
+    }
+    // The order holds <order> and <order>-2. Add <order>-3, delete <order>-2, and
+    // create again: counting the two remaining documents gives <order>-3, which
+    // Shopware rejects with DOCUMENT__NUMBER_ALREADY_EXISTS.
+    admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $firstOrder['id']]]);
+    $second = array_values(array_filter(
+        beliqDocuments($firstOrder['id']),
+        static fn (array $d): bool => ($d['documentNumber'] ?? null) === $firstOrder['number'] . '-2',
+    ));
+    check(count($second) === 1, 'the order holds ' . $firstOrder['number'] . '-2 before the delete');
+    admin('DELETE', '/document/' . $second[0]['id']);
+    $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $firstOrder['id']]]);
+    check(($create['errors'] ?? []) === [], 'the create succeeds (' . json_encode($create['errors'] ?? []) . ')');
+    $numbers = array_column(beliqDocuments($firstOrder['id']), 'documentNumber');
+    $n = $firstOrder['number'];
+    check($numbers === [$n, $n . '-3', $n . '-4'], 'the new document is numbered ' . $n . '-4 (numbers: ' . implode(', ', $numbers) . ')');
+} catch (Throwable $e) {
+    check(false, 'the deleted-document case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: the admin's Preview makes no beliq call ==\n";
+try {
+    if ($firstOrder === null) {
+        throw new RuntimeException('no order from the first case');
+    }
+    $before = beliqDocuments($firstOrder['id']);
+    $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+    $deepLinkCode = search('order', ['ids' => [$firstOrder['id']]])[0]['deepLinkCode'];
+    // What the create-document dialog's Preview button requests.
+    $config = rawurlencode(json_encode(['documentNumber' => $firstOrder['number'] . '-9', 'documentDate' => date('Y-m-d'), 'custom' => new stdClass()]));
+    $preview = http(
+        'GET',
+        SHOP . '/api/_action/order/' . $firstOrder['id'] . '/' . $deepLinkCode . '/document/' . DOCUMENT_TYPE . '/preview?fileType=pdf&config=' . $config,
+        ['Authorization: Bearer ' . adminToken()],
+    );
+    check($preview['status'] === 200, 'the preview answers 200 (got ' . $preview['status'] . ')');
+    check(str_starts_with($preview['type'], 'text/plain') && str_starts_with($preview['body'], 'beliq invoice: no preview'), 'the preview is the plugin\'s local notice');
+    check(array_column(beliqDocuments($firstOrder['id']), 'id') === array_column($before, 'id'), 'the preview stores no document');
+    if ($stub) {
+        check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call for the preview');
+    }
+} catch (Throwable $e) {
+    check(false, 'the preview case raised ' . $e->getMessage());
 }
 
 echo "\n";
