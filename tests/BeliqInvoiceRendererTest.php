@@ -148,6 +148,43 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame('text/plain; charset=utf-8', $doc->getContentType());
     }
 
+    public function testThePreviewOfAnOrderTheCreateWouldSkipIsNoNotice(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->privateOrder('SW10052');
+        $operation = new DocumentGenerateOperation($order->getId(), 'pdf', [], null, false, true);
+
+        // A notice would ask the merchant to create a document that the
+        // business-only setting then skips.
+        $result = $this->renderer($order, $this->config('zugferd', 'xml', businessOnly: true), $http)
+            ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        self::assertSame([], $http->calls);
+    }
+
+    public function testThePreviewOfAnOrderMissingDataShowsTheMissingValue(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
+        $order = $this->businessOrder('SW10053');
+        $order->setShippingCosts(new CalculatedPrice(
+            4.95,
+            4.95,
+            new CalculatedTaxCollection([new CalculatedTax(0.79, 19.0, 4.95)]),
+            new TaxRuleCollection(),
+        ));
+        $operation = new DocumentGenerateOperation($order->getId(), 'pdf', [], null, false, true);
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+            ->render([$order->getId() => $operation], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderSuccess($order->getId()));
+        $error = $result->getOrderError($order->getId());
+        self::assertNotNull($error, 'the create would fail, so the preview says why');
+        self::assertStringContainsString('no delivery that carries them', $error->getMessage());
+        self::assertSame([], $http->calls);
+    }
+
     public function testAStoredDocumentIsNotRenderedAgainForAnotherFileType(): void
     {
         $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);

@@ -83,23 +83,6 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 continue;
             }
 
-            // The admin's create-document dialog asks for a preview before the
-            // merchant creates the document. A beliq generate counts toward the
-            // plan's documents per month, so the preview gets a local notice
-            // instead. Returning nothing would show the merchant an error.
-            if ($operation->isPreview()) {
-                $result->addSuccess($orderId, new RenderedDocument(
-                    '',
-                    self::PREVIEW_NAME,
-                    'txt',
-                    [],
-                    'text/plain; charset=utf-8',
-                    self::PREVIEW_NOTICE,
-                ));
-
-                continue;
-            }
-
             try {
                 $order = $this->loadOrder($operation->getOrderId(), $context);
                 if (!$order instanceof OrderEntity) {
@@ -122,6 +105,24 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     $config->effectiveOutput(),
                     $config->effectiveProfile(),
                 );
+
+                // The admin's create-document dialog asks for a preview before the
+                // merchant creates the document. A beliq generate counts toward the
+                // plan's documents per month, so the preview stops here, after the
+                // same local checks as a create, and gets a notice. Returning
+                // nothing would show the merchant an error.
+                if ($operation->isPreview()) {
+                    $result->addSuccess($orderId, new RenderedDocument(
+                        '',
+                        self::PREVIEW_NAME,
+                        'txt',
+                        [],
+                        'text/plain; charset=utf-8',
+                        self::PREVIEW_NOTICE,
+                    ));
+
+                    continue;
+                }
 
                 $documentNumber = $this->documents->nextNumber($operation->getOrderId(), $source->number, $context);
 

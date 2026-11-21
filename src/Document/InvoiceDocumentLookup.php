@@ -12,8 +12,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 /**
  * Reads the beliq invoice documents already attached to an order. The generation
  * trigger skips a re-fired transition once a document exists (auto generation
- * never overwrites), and the renderer picks a number no document holds, because
- * Shopware rejects a duplicate document number.
+ * never overwrites), and the renderer picks a number no document on the order
+ * holds, because Shopware rejects a duplicate document number.
  */
 final class InvoiceDocumentLookup
 {

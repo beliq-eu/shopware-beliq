@@ -113,8 +113,9 @@ The generated document is stored as a beliq e-invoice document on the order (its
 Documents tab), with its file kept as private media. It is downloadable there as
 XML or a hybrid PDF, depending on the format you chose.
 
-Creating the document again from the Documents tab adds one numbered
-`<order number>-<n>`, one more than the highest number already on the order. The
+The first beliq document on an order takes the order number. Creating the
+document again from the Documents tab adds one numbered `<order number>-<n>`,
+with n one more than the highest such number on the order. The
 Preview button of that dialog shows a short notice instead of the document:
 each document beliq generates counts toward the documents per month of your
 beliq plan, and a preview would be one.
