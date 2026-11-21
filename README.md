@@ -41,12 +41,12 @@ XRechnung and German Peppol BIS invoices built by the plugin's mapper and client
 validated with zero errors against the same local API and engine
 (`LiveGenerateSmokeTest`, which runs only when `BELIQ_API_KEY` is set). On
 2026-11-05 the same test passed 3 of 3 against the production API, a Peppol BIS
-invoice from a non-German order included.
+invoice from a non-German order included. On 2026-11-21 the Dockware smoke in
+`smoke/` passed 36 of 36 checks against the production API: XRechnung, Peppol
+BIS and ZUGFeRD documents stored on paid orders, each validated green.
 
 Still open:
 
-- The Dockware run has not been repeated against the production API
-  (`api.beliq.eu`).
 - Non-standard VAT categories (reverse charge, intra-community, export) carry no
   exemption reason. The beliq API accepts one; the plugin does not send it.
 
@@ -193,6 +193,9 @@ a real database (SQLite through DBAL) and, for the HTTP layer, a real local
 server (PHP's built-in one). A live smoke against
 `/v1/generate` and `/v1/validate` is gated on a `BELIQ_API_KEY` environment
 variable.
+
+`smoke/` runs the plugin inside a real Shopware 6.7 store (Dockware) and needs
+Docker. See [smoke/README.md](smoke/README.md).
 
 ## License
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Reading a stored XML beliq invoice as PDF no longer calls beliq again. PDF
+  is the default file type of Shopware's Admin API document download and of
+  the Store API document route, and an XML document has no PDF file, so
+  Shopware asked the plugin to render the document again. That made a second
+  generate call, which counts against the beliq quota, and rewrote the stored
+  document's number to the regenerate form (`10000-2`), after which creating
+  the document again by hand failed with "Document number already exists". The
+  read now gets no document, as for any file type a document does not have
+  (the Admin API answers 204), and the stored document stays as it was. The
+  admin's Documents card was not affected: it asks for the stored file's own
+  type. A beliq document whose file was lost is not rebuilt either; create a
+  new one by hand, which takes the next number.
 - The Store descriptions in English and German and the README say that
   delivery through beliq is in development, next to what the plugin does
   today: it generates the document, which beliq checks, and does not send it.

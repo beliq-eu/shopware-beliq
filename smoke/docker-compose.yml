@@ -1,0 +1,24 @@
+# Local Shopware 6.7 store for the live smoke.
+#
+# Dockware's image is a complete store in one container: Apache, PHP, MySQL and
+# a Storefront sales channel. The repo root is mounted read-only at /plugin-src,
+# and run.sh copies the shipped files from there into custom/plugins: Dockware's
+# entrypoint chowns everything under /var/www/html and exits when a read-only
+# mount sits inside it. The beliq API is either the one BELIQ_BASE_URL names or, for
+# `./run.sh stub`, a stub on the host reached through host.docker.internal.
+name: beliq-shopware-smoke
+
+services:
+  shop:
+    image: dockware/shopware:6.7.16.0
+    ports:
+      - "127.0.0.1:8090:80"
+    environment:
+      BELIQ_API_KEY: ${BELIQ_API_KEY:-}
+      BELIQ_BASE_URL: ${BELIQ_BASE_URL:-}
+      BELIQ_SMOKE_STUB: ${BELIQ_SMOKE_STUB:-0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ..:/plugin-src:ro
+      - ./:/smoke:ro

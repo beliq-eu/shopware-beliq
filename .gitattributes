@@ -10,6 +10,7 @@
 /phpunit.xml export-ignore
 /renovate.json export-ignore
 /scripts export-ignore
+/smoke export-ignore
 /tests export-ignore
 /AGENTS.md export-ignore
 /CLAUDE.md export-ignore
