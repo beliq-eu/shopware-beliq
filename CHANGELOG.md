@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 (2026-11-21)
 
 - Reading a stored XML beliq invoice as PDF no longer calls beliq again. PDF
   is the default file type of Shopware's Admin API document download and of
