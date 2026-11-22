@@ -130,6 +130,12 @@ final class OrderAdapter
     {
         $label = $order->getOrderNumber() ?? $order->getId();
 
+        // Shopware creates no delivery for a cart of digital products only, so
+        // such an order names no shipping country.
+        $deliveries = $order->getDeliveries();
+        if ($deliveries === null || $deliveries->count() === 0) {
+            throw MissingOrderDataException::taxFreeOrder($label, 'it has no delivery to name its shipping country');
+        }
         $country = $this->shippingCountry($order);
         if ($country === null) {
             throw MissingOrderDataException::taxFreeOrder($label, 'its deliveries name no one shipping country');

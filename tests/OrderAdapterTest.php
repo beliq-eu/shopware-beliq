@@ -169,7 +169,7 @@ final class OrderAdapterTest extends TestCase
     {
         yield 'shipped within the seller\'s country' => [['DE'], ['DE123456789'], 'it ships within the seller\'s country'];
         yield 'an EU buyer with no VAT ID' => [['AT'], [], 'it ships to another EU country to a buyer with no VAT ID'];
-        yield 'no shipping address' => [[], ['ATU12345678'], 'its deliveries name no one shipping country'];
+        yield 'a delivery with no shipping address' => [[], ['ATU12345678'], 'its deliveries name no one shipping country'];
         yield 'two shipping countries' => [['AT', 'FR'], ['ATU12345678'], 'its deliveries name no one shipping country'];
     }
 
@@ -190,6 +190,18 @@ final class OrderAdapterTest extends TestCase
         $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE', nonEu: 'G'));
     }
 
+    /** A cart of digital products only: Shopware creates no delivery for it. */
+    public function testATaxFreeOrderWithNoDeliveryStops(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+        $order->setShippingCosts($this->shipping(0.0, []));
+        $order->setDeliveries(new OrderDeliveryCollection());
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Shopware marked order SW10001 as tax free, and it has no delivery to name its shipping country, so the plugin cannot tell');
+        $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE', nonEu: 'G'));
+    }
+
     /**
      * The failure field keeps 255 characters (RetrySchedule). An order without a
      * number is named by its 32-character id.
@@ -206,6 +218,10 @@ final class OrderAdapterTest extends TestCase
                 $this->config(euBusiness: 'AE', nonEu: 'G'),
             ];
         }
+
+        $noDelivery = $this->taxFreeOrder([$this->austria()]);
+        $noDelivery->setDeliveries(new OrderDeliveryCollection());
+        $orders[] = [$noDelivery, $this->config(euBusiness: 'AE')];
 
         foreach ($orders as [$order, $config]) {
             $order->setOrderNumber(str_repeat('9', 32));

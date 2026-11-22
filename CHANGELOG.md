@@ -16,7 +16,8 @@
   Shopware. Every line and the shipping take the category at 0%. Any other
   tax-free order, such as one shipped within the seller's country, to an EU
   buyer without a VAT ID or to several countries, still gets no invoice, and
-  the failure on the order says why.
+  the failure on the order says why. So does a tax-free order with no
+  delivery, which Shopware creates for a cart of digital products only.
 - Four new settings hold the exemption reason for `AE` (BR-AE-10) and `O`
   (BR-O-10). `G` uses the existing reason for `G`. Without a reason the order
   gets no invoice and no beliq call is made, as for `E` and `G`.

@@ -108,7 +108,9 @@ neither the seller's nor the buyer's (BR-O-02), so it names the seller by the
 company registration number (BT-30, BR-CO-26), which you then need to set.
 
 Any other tax-free order gets no invoice: one shipped within the seller's
-country, to an EU buyer without a VAT ID, or to several countries. The failure
+country, to an EU buyer without a VAT ID, or to several countries, and one with
+no delivery at all. Shopware creates no delivery for a cart of digital
+products only, so such an order names no shipping country. The failure
 on the order says why, and no beliq call is made. Intra-community supply (`K`)
 is not offered, because its invoice needs the actual delivery date (BT-72) and
 the deliver-to country (BT-80), which the plugin does not send.

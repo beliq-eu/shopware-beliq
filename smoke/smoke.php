@@ -633,9 +633,8 @@ try {
         'outOfScopeReasonCode' => 'VATEX-EU-O',
         'outOfScopeReasonText' => 'Not subject to VAT',
     ]));
-    admin('POST', '/_action/sync', ['smoke-channel-ch' => ['entity' => 'sales_channel_country', 'action' => 'upsert', 'payload' => [
-        ['salesChannelId' => $channel['id'], 'countryId' => $shop['countries']['CH']],
-    ]]]);
+    $channelCountry = ['salesChannelId' => $channel['id'], 'countryId' => $shop['countries']['CH']];
+    admin('POST', '/_action/sync', ['smoke-channel-ch' => ['entity' => 'sales_channel_country', 'action' => 'upsert', 'payload' => [$channelCountry]]]);
     withCompanyTax($shop['countries']['CH'], 'CH', static function () use ($shop, $product19, $stub, $baseUrl, $client): void {
         $swiss = ['country' => 'CH', 'city' => 'Zuerich', 'zipcode' => '8001', 'company' => 'Kunde AG', 'vatId' => 'CHE123456789'];
         checkTaxFreeInvoice(placeOrder($shop, $product19, 2, $swiss), $stub, $baseUrl, $client, static function (array $invoice): void {
@@ -651,6 +650,14 @@ try {
     });
 } catch (Throwable $e) {
     check(false, 'the not subject to VAT case raised ' . $e->getMessage());
+} finally {
+    if (isset($channelCountry)) {
+        try {
+            admin('POST', '/_action/sync', ['smoke-channel-ch' => ['entity' => 'sales_channel_country', 'action' => 'delete', 'payload' => [$channelCountry]]]);
+        } catch (Throwable $e) {
+            check(false, 'removing CH from the sales channel raised ' . $e->getMessage());
+        }
+    }
 }
 
 echo "\n== Case: a second paid transition keeps the document, a manual one adds -2 ==\n";
