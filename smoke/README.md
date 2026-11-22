@@ -23,8 +23,17 @@ configured reason, and the others carry none. More cases:
 - an exempt order with no exemption reason set gets no document, a failure
   on the order that names category `E` and BR-E-10, and no generate call;
 - an order Shopware records as tax free (an Austrian company buyer with a VAT
-  ID, under Austria's company tax setting) gets no document, a failure on the
-  order that says it is tax free, and no generate call;
+  ID, under Austria's company tax setting) gets no document while the setting
+  for tax-free orders to EU businesses is left at no e-invoice: a failure on the
+  order names that setting, and there is no generate call;
+- the same Austrian order, with reverse charge (`AE`) and its reason set, gets
+  one document that validates; a stub run checks that every line is `AE` at 0%
+  with one `AE` breakdown carrying the reason;
+- a tax-free order from a Swiss company buyer (under Switzerland's company tax
+  setting, with Switzerland added to the sales channel), with not subject to
+  VAT (`O`), its reason and the seller's registration number set, gets one
+  document that validates; a stub run checks that every line is `O`, the
+  breakdown carries the reason, and neither party carries a VAT ID;
 - a second paid transition stores no second document;
 - creating the document by hand adds one numbered `<order>-2`;
 - after `<order>-3` is added and `<order>-2` deleted, a create by hand
@@ -41,7 +50,7 @@ BELIQ_API_KEY=... BELIQ_BASE_URL=https://api.beliq.eu ./run.sh
 ```
 
 `BELIQ_BASE_URL` is resolved inside the container, so an API on this machine is
-`http://host.docker.internal:<port>`. One run makes 7 generate and 4 validate
+`http://host.docker.internal:<port>`. One run makes 9 generate and 6 validate
 calls with the key.
 
 ```bash

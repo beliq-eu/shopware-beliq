@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- An order Shopware marks tax free can get an invoice again, in the VAT
+  category you state for where it ships. Two new settings, both set to no
+  e-invoice by default, which keeps the 0.2.7 behaviour:
+  - "Tax-free orders to businesses in other EU countries", for an order that
+    ships to an EU country other than the seller's, to a buyer with a VAT ID:
+    reverse charge (`AE`).
+  - "Tax-free orders outside the EU", for an order that ships to a country
+    Shopware does not mark as an EU member: export outside the EU (`G`) or not
+    subject to VAT (`O`).
+
+  The country of the order's shipping address decides, by its EU flag in
+  Shopware. Every line and the shipping take the category at 0%. Any other
+  tax-free order, such as one shipped within the seller's country, to an EU
+  buyer without a VAT ID or to several countries, still gets no invoice, and
+  the failure on the order says why. So does a tax-free order with no
+  delivery, which Shopware creates for a cart of digital products only.
+- Four new settings hold the exemption reason for `AE` (BR-AE-10) and `O`
+  (BR-O-10). `G` uses the existing reason for `G`. Without a reason the order
+  gets no invoice and no beliq call is made, as for `E` and `G`.
+- An invoice in category `O` carries no VAT ID, neither the seller's nor the
+  buyer's (BR-O-02), so it names the seller by the company registration number
+  (BT-30, BR-CO-26). Without one the order gets no invoice.
+- Intra-community supply (`K`) is not offered: its invoice needs the actual
+  delivery date (BT-72, BR-IC-11) and the deliver-to country (BT-80,
+  BR-IC-12), which the plugin does not send.
+- The help texts of the setting for 0% lines and of the exemption reason for
+  `G` say how tax-free orders are handled now, in English and German. The
+  German help text of the setting for 0% lines also reads more naturally.
+
 ## 0.2.7 (2026-11-22)
 
 - An order Shopware marks tax free gets no invoice. Shopware records that it
@@ -9,8 +40,6 @@
   is made. Up to 0.2.6 such an order took the category set for 0% lines
   (`Z` by default), and in 0.2.6 with `E` or `G` also that category's
   exemption reason, so the invoice stated a VAT ground the shop had not.
-- The German help text of the setting for 0% lines reads more naturally. The
-  English text and what the setting does are unchanged.
 
 ## 0.2.6 (2026-11-21)
 

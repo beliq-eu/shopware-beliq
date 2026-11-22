@@ -226,8 +226,8 @@
             <name>zeroRateCategory</name>
             <label>VAT category for 0% lines</label>
             <label lang="de-DE">USt-Kategorie für 0%-Positionen</label>
-            <helpText>The tax treatment for zero-rated lines is the merchant's call. It applies to every 0% line of an order Shopware does not mark tax free. An order Shopware marks tax free gets no e-invoice, because Shopware does not record which VAT category applies. Reverse charge and intra-community supply are not auto-detected.</helpText>
-            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Dies gilt für jede 0%-Position einer Bestellung, die Shopware nicht als steuerfrei kennzeichnet. Für eine steuerfreie Bestellung wird keine E-Rechnung erstellt, weil Shopware nicht erfasst, welche USt-Kategorie gilt. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
+            <helpText>The tax treatment for zero-rated lines is the merchant's call. It applies to every 0% line of an order Shopware does not mark tax free. An order Shopware marks tax free takes its category from the two settings for tax-free orders below. Reverse charge and intra-community supply are not auto-detected.</helpText>
+            <helpText lang="de-DE">Die steuerliche Handhabung von 0%-Positionen liegt in der Verantwortung des Händlers. Dies gilt für jede 0%-Position einer Bestellung, die Shopware nicht als steuerfrei kennzeichnet. Eine Bestellung, die Shopware als steuerfrei kennzeichnet, erhält ihre USt-Kategorie aus den beiden Einstellungen für steuerfreie Bestellungen weiter unten. Reverse-Charge-Verfahren und innergemeinschaftliche Lieferungen werden nicht automatisch erkannt.</helpText>
             <defaultValue>Z</defaultValue>
             <options>
                 <option>
@@ -262,8 +262,8 @@
             <name>exportReasonCode</name>
             <label>Exemption reason code for category G</label>
             <label lang="de-DE">Code des Befreiungsgrunds für Kategorie G</label>
-            <helpText>A code from the VATEX code list (BT-121) that means "Export outside the EU". An invoice with 0% lines in category G needs this code or the text below (BR-G-10). Without either, no invoice is created.</helpText>
-            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Export outside the EU“. Eine Rechnung mit 0%-Positionen der Kategorie G braucht diesen Code oder den Text darunter (BR-G-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+            <helpText>A code from the VATEX code list (BT-121) that means "Export outside the EU". An invoice with lines in category G, from the setting for 0% lines or for tax-free orders outside the EU, needs this code or the text below (BR-G-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Export outside the EU“. Eine Rechnung mit Positionen der Kategorie G, aus der Einstellung für 0%-Positionen oder für steuerfreie Bestellungen außerhalb der EU, braucht diesen Code oder den Text darunter (BR-G-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
         </input-field>
         <input-field type="text">
             <name>exportReasonText</name>
@@ -271,6 +271,76 @@
             <label lang="de-DE">Text des Befreiungsgrunds für Kategorie G</label>
             <helpText>The text "Export outside the EU", or the same standard text in another language (BT-120).</helpText>
             <helpText lang="de-DE">Der Text „Export outside the EU“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
+        </input-field>
+        <input-field type="single-select">
+            <name>taxFreeEuBusiness</name>
+            <label>Tax-free orders to businesses in other EU countries</label>
+            <label lang="de-DE">Steuerfreie Bestellungen an Unternehmen in anderen EU-Ländern</label>
+            <helpText>For an order Shopware marks tax free that ships to an EU country other than the seller's, to a buyer with a VAT ID. Shopware does not record why the order is tax free, so you state the VAT category for all its lines and its shipping: AE (reverse charge), or no e-invoice. Intra-community supply (K) is not offered. An order with no delivery, such as one of digital products only, names no shipping country and gets no e-invoice.</helpText>
+            <helpText lang="de-DE">Für eine Bestellung, die Shopware als steuerfrei kennzeichnet und die in ein anderes EU-Land als das des Verkäufers an einen Käufer mit USt-IdNr. geht. Shopware erfasst nicht, warum die Bestellung steuerfrei ist. Daher legen Sie die USt-Kategorie für alle Positionen und den Versand fest: AE (Reverse-Charge-Verfahren) oder keine E-Rechnung. Innergemeinschaftliche Lieferungen (K) werden nicht angeboten. Eine Bestellung ohne Lieferung, etwa nur mit digitalen Produkten, nennt kein Lieferland und erhält keine E-Rechnung.</helpText>
+            <defaultValue>stop</defaultValue>
+            <options>
+                <option>
+                    <id>stop</id>
+                    <name>No e-invoice</name>
+                    <name lang="de-DE">Keine E-Rechnung</name>
+                </option>
+                <option>
+                    <id>AE</id>
+                    <name>AE - Reverse charge</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="single-select">
+            <name>taxFreeNonEu</name>
+            <label>Tax-free orders outside the EU</label>
+            <label lang="de-DE">Steuerfreie Bestellungen außerhalb der EU</label>
+            <helpText>For an order Shopware marks tax free that ships to a country Shopware does not mark as an EU member. Shopware does not record why the order is tax free, so you state the VAT category for all its lines and its shipping: G (export outside the EU), O (not subject to VAT), or no e-invoice. Category G uses the exemption reason for G above. An invoice in category O carries no VAT ID, neither the seller's nor the buyer's (BR-O-02), so it needs the company registration number. An order with no delivery, such as one of digital products only, names no shipping country and gets no e-invoice.</helpText>
+            <helpText lang="de-DE">Für eine Bestellung, die Shopware als steuerfrei kennzeichnet und die in ein Land geht, das Shopware nicht als EU-Mitglied kennzeichnet. Shopware erfasst nicht, warum die Bestellung steuerfrei ist. Daher legen Sie die USt-Kategorie für alle Positionen und den Versand fest: G (Ausfuhr aus der EU), O (nicht steuerbar) oder keine E-Rechnung. Kategorie G verwendet den Befreiungsgrund für Kategorie G weiter oben. Eine Rechnung der Kategorie O enthält keine USt-IdNr., weder die des Verkäufers noch die des Käufers (BR-O-02), und braucht daher die Handelsregisternummer. Eine Bestellung ohne Lieferung, etwa nur mit digitalen Produkten, nennt kein Lieferland und erhält keine E-Rechnung.</helpText>
+            <defaultValue>stop</defaultValue>
+            <options>
+                <option>
+                    <id>stop</id>
+                    <name>No e-invoice</name>
+                    <name lang="de-DE">Keine E-Rechnung</name>
+                </option>
+                <option>
+                    <id>G</id>
+                    <name>G - Export outside the EU</name>
+                </option>
+                <option>
+                    <id>O</id>
+                    <name>O - Not subject to VAT</name>
+                </option>
+            </options>
+        </input-field>
+        <input-field type="text">
+            <name>reverseChargeReasonCode</name>
+            <label>Exemption reason code for category AE</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie AE</label>
+            <helpText>A code from the VATEX code list (BT-121) that means "Reverse charge". An invoice in category AE needs this code or the text below (BR-AE-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Reverse charge“. Eine Rechnung der Kategorie AE braucht diesen Code oder den Text darunter (BR-AE-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>reverseChargeReasonText</name>
+            <label>Exemption reason text for category AE</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie AE</label>
+            <helpText>The text "Reverse charge", or the same standard text in another language (BT-120).</helpText>
+            <helpText lang="de-DE">Der Text „Reverse charge“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>outOfScopeReasonCode</name>
+            <label>Exemption reason code for category O</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie O</label>
+            <helpText>A code from the VATEX code list (BT-121) that means "Not subject to VAT". An invoice in category O needs this code or the text below (BR-O-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Not subject to VAT“. Eine Rechnung der Kategorie O braucht diesen Code oder den Text darunter (BR-O-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>outOfScopeReasonText</name>
+            <label>Exemption reason text for category O</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie O</label>
+            <helpText>The text "Not subject to VAT", or the same standard text in another language (BT-120).</helpText>
+            <helpText lang="de-DE">Der Text „Not subject to VAT“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
         </input-field>
     </card>
 </config>

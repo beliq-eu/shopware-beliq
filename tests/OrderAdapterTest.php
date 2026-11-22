@@ -5,6 +5,7 @@ namespace Beliq\Shopware\Tests;
 use Beliq\Shopware\Config\PluginConfig;
 use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Invoice\Address;
+use Beliq\Shopware\Invoice\ExemptionReason;
 use Beliq\Shopware\Invoice\Party;
 use Beliq\Shopware\Invoice\PaymentMeans;
 use Beliq\Shopware\Service\InvoiceMapper;
@@ -94,23 +95,143 @@ final class OrderAdapterTest extends TestCase
     }
 
     /**
-     * Shopware records that no VAT was charged, not why. Any one category would
-     * claim a legal ground the shop did not state.
+     * Shopware records that no VAT was charged, not why. The merchant states the
+     * category for an order to a business in another EU country, and every line
+     * and the shipping take it at 0%, whatever tax component Shopware kept.
      */
-    public function testTaxFreeOrderStops(): void
+    public function testTaxFreeOrderToAnEuBusinessTakesTheStatedCategory(): void
     {
-        $order = $this->order(
-            taxStatus: CartPrice::TAX_STATE_FREE,
-            lines: [
-                $this->line('Export good', 3, 300.0, [], 'EX-1'),
-            ],
-            customer: $this->customer('c@x.test', 'Jo', 'Doe', 'Overseas Inc', ['CHE123456789'], CustomerEntity::ACCOUNT_TYPE_BUSINESS),
-            billing: $this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', 'Overseas Inc'),
+        $order = $this->taxFreeOrder([$this->austria()]);
+
+        $source = $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE', nonEu: 'G'));
+
+        self::assertCount(2, $source->lines);
+        foreach ($source->lines as $line) {
+            self::assertSame('AE', $line->vatCategoryCode);
+            self::assertSame(0.0, $line->vatRate);
+        }
+        self::assertEqualsWithDelta(300.0, $source->lines[0]->lineNetTotal, 0.001);
+        self::assertEqualsWithDelta(100.0, $source->lines[0]->unitNetPrice, 0.001);
+        self::assertSame('Standard', $source->lines[1]->description);
+        self::assertEqualsWithDelta(10.0, $source->lines[1]->lineNetTotal, 0.001);
+    }
+
+    public function testTaxFreeOrderOutsideTheEuTakesTheStatedCategory(): void
+    {
+        $order = $this->taxFreeOrder([$this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', 'Overseas Inc')], vatIds: []);
+
+        $source = $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE', nonEu: 'G'));
+
+        self::assertSame(['G', 'G'], array_map(static fn ($line) => $line->vatCategoryCode, $source->lines));
+    }
+
+    public function testATaxFreeOrderGoesThroughTheMapperAsOneZeroTaxGroup(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+        $config = $this->config(euBusiness: 'AE', reasons: ['AE' => new ExemptionReason('VATEX-EU-AE', 'Reverse charge')]);
+
+        $invoice = (new InvoiceMapper())->toGenerateBody($this->adapter->toSourceOrder($order, $config), 'xrechnung')['invoice'];
+
+        self::assertSame([[
+            'vatCategoryCode' => 'AE',
+            'vatRate' => 0.0,
+            'taxableAmount' => 310.0,
+            'taxAmount' => 0.0,
+            'exemptionReasonCode' => 'VATEX-EU-AE',
+            'exemptionReasonText' => 'Reverse charge',
+        ]], $invoice['taxSummary']);
+        self::assertSame(310.0, $invoice['totalGrossAmount']);
+    }
+
+    public function testATaxFreeOrderToAnEuBusinessStopsWhenNoCategoryIsSet(): void
+    {
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Shopware marked order SW10001 as tax free, and it ships to a business in another EU country. Choose the VAT category for such orders in "Tax-free orders to businesses in other EU countries", then generate the invoice again.');
+        $this->adapter->toSourceOrder($this->taxFreeOrder([$this->austria()]), $this->config(nonEu: 'G'));
+    }
+
+    public function testATaxFreeOrderOutsideTheEuStopsWhenNoCategoryIsSet(): void
+    {
+        $order = $this->taxFreeOrder([$this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', 'Overseas Inc')]);
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('it ships outside the EU. Choose the VAT category for such orders in "Tax-free orders outside the EU"');
+        $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE'));
+    }
+
+    /**
+     * The settings name a category only for the two destinations. Any other
+     * tax-free order does not say which category applies.
+     *
+     * @return iterable<string, array{0: list<string>, 1: list<string>, 2: string}>
+     */
+    public static function taxFreeOrdersWithNoStatedCategory(): iterable
+    {
+        yield 'shipped within the seller\'s country' => [['DE'], ['DE123456789'], 'it ships within the seller\'s country'];
+        yield 'an EU buyer with no VAT ID' => [['AT'], [], 'it ships to another EU country to a buyer with no VAT ID'];
+        yield 'a delivery with no shipping address' => [[], ['ATU12345678'], 'its deliveries name no one shipping country'];
+        yield 'two shipping countries' => [['AT', 'FR'], ['ATU12345678'], 'its deliveries name no one shipping country'];
+    }
+
+    /**
+     * @param list<string> $countries
+     * @param list<string> $vatIds
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('taxFreeOrdersWithNoStatedCategory')]
+    public function testOtherTaxFreeOrdersStop(array $countries, array $vatIds, string $cause): void
+    {
+        $order = $this->taxFreeOrder(
+            array_map(fn (string $iso) => $this->address('Street 1', '1000', 'City', $iso, 'Kaeufer GmbH', isEu: true), $countries),
+            $vatIds,
         );
 
         $this->expectException(MissingOrderDataException::class);
-        $this->expectExceptionMessage('Shopware marked order SW10001 as tax free, and the plugin cannot tell which VAT category applies');
-        $this->adapter->toSourceOrder($order, $this->config());
+        $this->expectExceptionMessage('Shopware marked order SW10001 as tax free, and ' . $cause . ', so the plugin cannot tell which VAT category applies and generates no e-invoice for the order.');
+        $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE', nonEu: 'G'));
+    }
+
+    /** A cart of digital products only: Shopware creates no delivery for it. */
+    public function testATaxFreeOrderWithNoDeliveryStops(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+        $order->setShippingCosts($this->shipping(0.0, []));
+        $order->setDeliveries(new OrderDeliveryCollection());
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Shopware marked order SW10001 as tax free, and it has no delivery to name its shipping country, so the plugin cannot tell');
+        $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE', nonEu: 'G'));
+    }
+
+    /**
+     * The failure field keeps 255 characters (RetrySchedule). An order without a
+     * number is named by its 32-character id.
+     */
+    public function testEveryTaxFreeStopFitsTheFailureField(): void
+    {
+        $orders = [
+            [$this->taxFreeOrder([$this->austria()]), $this->config()],
+            [$this->taxFreeOrder([$this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', null)]), $this->config()],
+        ];
+        foreach (self::taxFreeOrdersWithNoStatedCategory() as [$countries, $vatIds]) {
+            $orders[] = [
+                $this->taxFreeOrder(array_map(fn (string $iso) => $this->address('Street 1', '1000', 'City', $iso, null, isEu: true), $countries), $vatIds),
+                $this->config(euBusiness: 'AE', nonEu: 'G'),
+            ];
+        }
+
+        $noDelivery = $this->taxFreeOrder([$this->austria()]);
+        $noDelivery->setDeliveries(new OrderDeliveryCollection());
+        $orders[] = [$noDelivery, $this->config(euBusiness: 'AE')];
+
+        foreach ($orders as [$order, $config]) {
+            $order->setOrderNumber(str_repeat('9', 32));
+            try {
+                $this->adapter->toSourceOrder($order, $config);
+                self::fail('no exception');
+            } catch (MissingOrderDataException $e) {
+                self::assertLessThanOrEqual(255, mb_strlen($e->getMessage()), $e->getMessage());
+            }
+        }
     }
 
     /**
@@ -443,8 +564,15 @@ final class OrderAdapterTest extends TestCase
         self::assertEqualsWithDelta(0.0, $source->lines[0]->vatRate, 0.001);
     }
 
-    private function config(?PaymentMeans $paymentMeans = null): PluginConfig
-    {
+    /**
+     * @param array<string, ExemptionReason> $reasons
+     */
+    private function config(
+        ?PaymentMeans $paymentMeans = null,
+        ?string $euBusiness = null,
+        ?string $nonEu = null,
+        array $reasons = [],
+    ): PluginConfig {
         return new PluginConfig(
             enabled: true,
             apiKey: 'test-key',
@@ -457,7 +585,36 @@ final class OrderAdapterTest extends TestCase
             zeroRateCategory: 'Z',
             seller: new Party('Seller GmbH', new Address('Berlin', '10115', 'DE'), vatId: 'DE999999999'),
             paymentMeans: $paymentMeans,
+            exemptionReasons: $reasons,
+            taxFreeEuBusinessCategory: $euBusiness,
+            taxFreeNonEuCategory: $nonEu,
         );
+    }
+
+    /**
+     * A company order Shopware marks tax free: three goods at 300 and shipping
+     * at 10, the shipping with the 19% component Shopware can keep on it. One
+     * charged delivery per shipping address, each to its own address.
+     *
+     * @param list<OrderAddressEntity> $shipTo
+     * @param list<string> $vatIds
+     */
+    private function taxFreeOrder(array $shipTo, array $vatIds = ['ATU12345678']): OrderEntity
+    {
+        return $this->order(
+            taxStatus: CartPrice::TAX_STATE_FREE,
+            lines: [$this->line('Export good', 3, 300.0, [], 'EX-1')],
+            customer: $this->customer('c@x.test', 'Jo', 'Doe', 'Kaeufer GmbH', $vatIds, CustomerEntity::ACCOUNT_TYPE_BUSINESS),
+            billing: $shipTo[0] ?? $this->austria(),
+            shipping: $this->shipping(10.0, [[0.0, 19.0, 10.0]]),
+            shippingMethods: array_fill(0, max(1, count($shipTo)), 'Standard'),
+            shippingAddresses: $shipTo,
+        );
+    }
+
+    private function austria(): OrderAddressEntity
+    {
+        return $this->address('Ring 1', '1010', 'Wien', 'AT', 'Kaeufer GmbH', isEu: true);
     }
 
     /**
@@ -537,11 +694,13 @@ final class OrderAdapterTest extends TestCase
         string $city,
         string $countryIso,
         ?string $company,
+        bool $isEu = false,
     ): OrderAddressEntity {
         $country = new CountryEntity();
         $country->setUniqueIdentifier(Uuid::randomHex());
         $country->setId(Uuid::randomHex());
         $country->setIso($countryIso);
+        $country->setIsEu($isEu);
 
         $address = new OrderAddressEntity();
         $address->setUniqueIdentifier(Uuid::randomHex());
@@ -598,12 +757,14 @@ final class OrderAdapterTest extends TestCase
      * One delivery per entry of $methodNames, each carrying the shipping costs,
      * and one free delivery per entry of $freeMethods. A method's name is the
      * loaded language's, as the DAL puts it in `translated`; null stands for a
-     * method that has no name.
+     * method that has no name. The charged delivery at index i ships to
+     * $shippingAddresses[i], when there is one.
      *
      * @param list<string|null> $methodNames
      * @param list<string> $freeMethods
+     * @param list<OrderAddressEntity> $shippingAddresses
      */
-    private function deliveries(array $methodNames, CalculatedPrice $charged, array $freeMethods = []): OrderDeliveryCollection
+    private function deliveries(array $methodNames, CalculatedPrice $charged, array $freeMethods = [], array $shippingAddresses = []): OrderDeliveryCollection
     {
         $free = $this->shipping(0.0, []);
         $deliveries = new OrderDeliveryCollection();
@@ -619,6 +780,10 @@ final class OrderAdapterTest extends TestCase
             $delivery->setShippingMethodId($method->getId());
             $delivery->setShippingMethod($method);
             $delivery->setShippingCosts($costs);
+            $address = $shippingAddresses[$deliveries->count()] ?? null;
+            if ($address !== null) {
+                $delivery->setShippingOrderAddress($address);
+            }
             $deliveries->add($delivery);
         }
 
@@ -629,6 +794,7 @@ final class OrderAdapterTest extends TestCase
      * @param list<OrderLineItemEntity> $lines
      * @param list<string|null> $shippingMethods
      * @param list<string> $freeShippingMethods
+     * @param list<OrderAddressEntity> $shippingAddresses
      */
     private function order(
         string $taxStatus,
@@ -641,6 +807,7 @@ final class OrderAdapterTest extends TestCase
         ?CalculatedPrice $shipping = null,
         array $shippingMethods = ['Standard'],
         array $freeShippingMethods = [],
+        array $shippingAddresses = [],
     ): OrderEntity {
         $currencyEntity = new CurrencyEntity();
         $currencyEntity->setUniqueIdentifier(Uuid::randomHex());
@@ -658,7 +825,7 @@ final class OrderAdapterTest extends TestCase
         $order->setOrderCustomer($customer);
         $order->setBillingAddress($billing);
         $order->setShippingCosts($shipping ?? $this->shipping(0.0, []));
-        $order->setDeliveries($this->deliveries($shippingMethods, $order->getShippingCosts(), $freeShippingMethods));
+        $order->setDeliveries($this->deliveries($shippingMethods, $order->getShippingCosts(), $freeShippingMethods, $shippingAddresses));
         if ($customFields !== null) {
             $order->setCustomFields($customFields);
         }

@@ -76,8 +76,8 @@ generation to all orders.
 Lines taxed at a standard rate are mapped to VAT category `S`. A zero-rated line
 takes a merchant-configured category: `Z` zero rated (the default), `E` exempt
 from VAT, or `G` export outside the EU. Reverse charge and intra-community
-supply are not offered and not auto-detected: a wrong guess in a compliance
-tool is worse than none.
+supply are not auto-detected: a wrong guess in a compliance tool is worse than
+none.
 
 EN 16931 requires a VAT exemption reason, a code from the VATEX code list
 (BT-121) or a text (BT-120), for category `E` (BR-E-10) and `G` (BR-G-10), and
@@ -88,11 +88,32 @@ set for that category gets no invoice: the failure on the order names the
 category and the rule, and no beliq call is made. The category and its reason
 apply to every 0% line of an order that Shopware does not mark tax free.
 
-An order Shopware marks tax free gets no invoice. Shopware records that it
-charged no VAT, not why, and the grounds it can stand for, such as
-intra-community supply (`K`), export (`G`) or reverse charge (`AE`), each need
-their own category and exemption reason. The
-failure on the order says so, and no beliq call is made.
+### Tax-free orders
+
+Shopware marks an order tax free from the settings of the country it ships to
+(tax free for every customer, or for companies). It records that it charged no
+VAT, not why, and the VAT category depends on why. So you state the category,
+for two kinds of order, decided by the country of the order's shipping address:
+
+| Setting | The order ships | Categories offered |
+|---|---|---|
+| Tax-free orders to businesses in other EU countries | to an EU country other than the seller's, to a buyer with a VAT ID | `AE` reverse charge |
+| Tax-free orders outside the EU | to a country Shopware does not mark as an EU member | `G` export outside the EU, `O` not subject to VAT |
+
+Both settings default to no e-invoice. Every line and the shipping of the order
+take the category you choose, at 0%. Each category needs its exemption reason
+(BR-AE-10, BR-G-10, BR-O-10): `AE` and `O` have their own reason settings, and
+`G` uses the reason for `G` above. An invoice in category `O` carries no VAT ID,
+neither the seller's nor the buyer's (BR-O-02), so it names the seller by the
+company registration number (BT-30, BR-CO-26), which you then need to set.
+
+Any other tax-free order gets no invoice: one shipped within the seller's
+country, to an EU buyer without a VAT ID, or to several countries, and one with
+no delivery at all. Shopware creates no delivery for a cart of digital
+products only, so such an order names no shipping country. The failure
+on the order says why, and no beliq call is made. Intra-community supply (`K`)
+is not offered, because its invoice needs the actual delivery date (BT-72) and
+the deliver-to country (BT-80), which the plugin does not send.
 
 ## Install
 
@@ -120,6 +141,9 @@ In the plugin settings (Extensions -> beliq e-invoicing -> Configure):
 - Choose when to generate: on payment paid (default) or on order completed.
 - If you pick `E` or `G` for 0% lines, enter the exemption reason for that
   category (see Scope of generation).
+- If your shop has tax-free orders, choose their category in the two settings
+  for tax-free orders, and enter the exemption reason for it. Category `O`
+  also needs the company registration number (see Tax-free orders).
 - Turn on `Generate invoices automatically`. Generation is off until you do.
 
 The generated document is stored as a beliq e-invoice document on the order (its

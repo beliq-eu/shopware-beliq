@@ -186,6 +186,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         $criteria->addAssociation('orderCustomer.customer');
         $criteria->addAssociation('currency');
         $criteria->addAssociation('deliveries.shippingMethod');
+        $criteria->addAssociation('deliveries.shippingOrderAddress.country');
 
         return $this->orderRepository->search($criteria, $orderContext)->getEntities()->first();
     }

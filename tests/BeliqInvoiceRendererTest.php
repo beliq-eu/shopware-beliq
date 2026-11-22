@@ -356,7 +356,8 @@ final class BeliqInvoiceRendererTest extends TestCase
 
     /**
      * Shopware records that no VAT was charged, not why, so a tax-free order
-     * gets no invoice and beliq is not called.
+     * whose shipping country the plugin cannot read gets no invoice and beliq
+     * is not called.
      */
     public function testATaxFreeOrderIsARenderErrorWithoutCallingTheApi(): void
     {
