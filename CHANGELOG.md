@@ -1,10 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- The German help text of the setting for 0% lines reads more naturally. The
-  English text and what the setting does are unchanged.
-
 ## 0.2.7 (2026-11-22)
 
 - An order Shopware marks tax free gets no invoice. Shopware records that it
@@ -14,6 +9,8 @@
   is made. Up to 0.2.6 such an order took the category set for 0% lines
   (`Z` by default), and in 0.2.6 with `E` or `G` also that category's
   exemption reason, so the invoice stated a VAT ground the shop had not.
+- The German help text of the setting for 0% lines reads more naturally. The
+  English text and what the setting does are unchanged.
 
 ## 0.2.6 (2026-11-21)
 
