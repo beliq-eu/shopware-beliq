@@ -112,10 +112,11 @@ An invoice in category `K` carries the deliver-to country (BT-80, BR-IC-12),
 the country of the order's shipping address, and the actual delivery date
 (BT-72, BR-IC-11). Shopware records no delivery date, so the plugin takes the
 day the order's delivery was set to "Shipped", from Shopware's state history,
-as a UTC date. An order whose delivery is not shipped when the invoice is
-created gets no invoice: under the trigger "Payment is marked paid", an order
-paid before it ships stops at payment, and you create the document by hand
-once it has shipped. A delivery set to shipped again after a cancel counts on
+as a UTC date. An order whose delivery was never set to shipped when the
+invoice is created gets no invoice: under the trigger "Payment is marked
+paid", an order paid before it ships stops at payment, and you create the
+document by hand once it has shipped. A delivery set to shipped and later
+cancelled or returned still counts as shipped on that day. A delivery set to shipped again after a cancel counts on
 the later day. Deliveries set to shipped on different days give no one date,
 and the order gets no invoice either.
 
