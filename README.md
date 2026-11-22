@@ -9,9 +9,9 @@ reporting stay with your access point.
 
 ## Status
 
-Version 0.2.8 is on Packagist as
+Version 0.2.9 is on Packagist as
 [`beliq/shopware-beliq`](https://packagist.org/packages/beliq/shopware-beliq),
-built from the tag `v0.2.8`. It is not in the Shopware Store.
+built from the tag `v0.2.9`. It is not in the Shopware Store.
 
 Built and unit tested:
 

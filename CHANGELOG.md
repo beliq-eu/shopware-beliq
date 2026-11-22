@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.9 (2026-11-22)
 
 - Intra-community supply (`K`) is offered for "Tax-free orders to businesses
   in other EU countries", next to reverse charge (`AE`). Its invoice carries
