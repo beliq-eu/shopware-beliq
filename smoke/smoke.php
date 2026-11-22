@@ -213,6 +213,14 @@ function transition(string $orderId, string $transition): void
     admin('POST', '/_action/order_transaction/' . $transactions[0]['id'] . '/state/' . $transition);
 }
 
+/** Sets every delivery of the order to shipped, the merchant's action in the admin. */
+function shipDeliveries(string $orderId): void
+{
+    foreach (search('order-delivery', ['filter' => [['type' => 'equals', 'field' => 'orderId', 'value' => $orderId]]]) as $delivery) {
+        admin('POST', '/_action/order_delivery/' . $delivery['id'] . '/state/ship');
+    }
+}
+
 /** How many generate calls stub-router.php has answered. */
 function stubGenerateCount(string $baseUrl): int
 {
@@ -286,7 +294,16 @@ function checkTaxFreeInvoice(array $order, bool $stub, string $baseUrl, BeliqCli
         $checkRequest(stubLastGenerate($baseUrl)['invoice'] ?? []);
     }
 
-    $document = $documents[0];
+    checkStoredDocumentValidates($documents[0], $client);
+}
+
+/**
+ * Downloads a stored beliq document as XML and checks that beliq validates it.
+ *
+ * @param array<string, mixed> $document
+ */
+function checkStoredDocumentValidates(array $document, BeliqClient $client): void
+{
     $download = http(
         'GET',
         SHOP . '/api/_action/document/' . $document['id'] . '/' . $document['deepLinkCode'] . '?fileType=xml',
@@ -465,6 +482,8 @@ $base = [
     'taxFreeNonEu' => 'stop',
     'reverseChargeReasonCode' => '',
     'reverseChargeReasonText' => '',
+    'intraCommunityReasonCode' => '',
+    'intraCommunityReasonText' => '',
     'outOfScopeReasonCode' => '',
     'outOfScopeReasonText' => '',
     'sellerRegistrationId' => '',
@@ -621,6 +640,60 @@ try {
     });
 } catch (Throwable $e) {
     check(false, 'the reverse charge case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: a tax-free order to an Austrian company, intra-community supply stated ==\n";
+// K needs the actual delivery date (BR-IC-11), the day the delivery was set to
+// shipped. Paid before shipping, the order gets no invoice; created by hand
+// after shipping, it does.
+try {
+    configure(array_merge($base, $cases['German XRechnung (xml)']['config'], [
+        'taxFreeEuBusiness' => 'K',
+        'intraCommunityReasonCode' => 'VATEX-EU-IC',
+        'intraCommunityReasonText' => 'Intra-community supply',
+    ]));
+    withCompanyTax($shop['countries']['AT'], 'AT', static function () use ($shop, $product19, $austrianCompany, $stub, $baseUrl, $client): void {
+        $order = placeOrder($shop, $product19, 2, $austrianCompany);
+        $taxStatus = search('order', ['ids' => [$order['id']]])[0]['taxStatus'] ?? null;
+        check($taxStatus === 'tax-free', 'Shopware recorded the order as tax free (got ' . json_encode($taxStatus) . ')');
+        $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+        transition($order['id'], 'paid');
+        check(beliqDocuments($order['id']) === [], 'paid before shipping, the order has no beliq document');
+        $failure = (string) (orderCustomFields($order['id'])[FAILURE_FIELD] ?? '');
+        check(
+            str_contains($failure, 'category K') && str_contains($failure, '(BT-72, BR-IC-11)') && str_ends_with($failure, 'generate the invoice again.'),
+            'the failure on the order names the missing delivery date, in full (' . $failure . ')',
+        );
+        if ($stub) {
+            check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call');
+        }
+
+        // The day is read before and after the ship, so a run across midnight UTC
+        // accepts either.
+        $shipDays = [gmdate('Y-m-d')];
+        shipDeliveries($order['id']);
+        $shipDays[] = gmdate('Y-m-d');
+        $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $order['id']]]);
+        check(($create['errors'] ?? []) === [], 'after shipping, creating the document succeeds (' . json_encode($create['errors'] ?? []) . ')');
+        $documents = beliqDocuments($order['id']);
+        check(count($documents) === 1, 'the order holds one beliq document');
+        if ($stub) {
+            $invoice = stubLastGenerate($baseUrl)['invoice'] ?? [];
+            [$lines, $summary] = sentCategories($invoice);
+            check($lines !== [] && array_unique($lines, SORT_REGULAR) === [['K', 0.0]], 'every line of the request is K at 0% (' . json_encode($lines) . ')');
+            check($summary === [['K', 'VATEX-EU-IC', 'Intra-community supply']], 'the request has one K breakdown with the configured reason (' . json_encode($summary) . ')');
+            $delivery = $invoice['delivery'] ?? null;
+            check(
+                is_array($delivery) && in_array($delivery['date'] ?? null, $shipDays, true) && ($delivery['address'] ?? null) === ['countryCode' => 'AT'],
+                'the request carries the shipping day and AT as the delivery (BT-72, BT-80) (' . json_encode($invoice['delivery'] ?? null) . ')',
+            );
+        }
+        if (count($documents) === 1) {
+            checkStoredDocumentValidates($documents[0], $client);
+        }
+    });
+} catch (Throwable $e) {
+    check(false, 'the intra-community supply case raised ' . $e->getMessage());
 }
 
 echo "\n== Case: a tax-free order to a Swiss company, not subject to VAT stated ==\n";

@@ -143,6 +143,101 @@ final class OrderAdapterTest extends TestCase
         self::assertSame(310.0, $invoice['totalGrossAmount']);
     }
 
+    /**
+     * An invoice in category K needs the actual delivery date (BT-72, BR-IC-11)
+     * and the deliver-to country (BT-80, BR-IC-12). The date is the day the
+     * delivery was set to shipped.
+     */
+    public function testATaxFreeOrderInCategoryKCarriesTheShippedDayAndTheShippingCountry(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+        $config = $this->config(euBusiness: 'K', reasons: ['K' => new ExemptionReason('VATEX-EU-IC', 'Intra-community supply')]);
+
+        $source = $this->adapter->toSourceOrder($order, $config, $this->shippedOn($order, [['2026-07-02']]));
+
+        self::assertSame(['K', 'K'], array_map(static fn ($line) => $line->vatCategoryCode, $source->lines));
+        self::assertSame('2026-07-02', $source->deliveryDate);
+        self::assertSame('AT', $source->deliverToCountryCode);
+
+        $invoice = (new InvoiceMapper())->toGenerateBody($source, 'xrechnung')['invoice'];
+        self::assertSame(['date' => '2026-07-02', 'address' => ['countryCode' => 'AT']], $invoice['delivery']);
+        self::assertSame([[
+            'vatCategoryCode' => 'K',
+            'vatRate' => 0.0,
+            'taxableAmount' => 310.0,
+            'taxAmount' => 0.0,
+            'exemptionReasonCode' => 'VATEX-EU-IC',
+            'exemptionReasonText' => 'Intra-community supply',
+        ]], $invoice['taxSummary']);
+    }
+
+    public function testTwoDeliveriesShippedOnOneDayGiveThatDay(): void
+    {
+        $austria = $this->austria();
+        $order = $this->taxFreeOrder([$austria, $austria]);
+
+        $source = $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'K'), $this->shippedOn($order, [['2026-07-02'], ['2026-07-02']]));
+
+        self::assertSame('2026-07-02', $source->deliveryDate);
+    }
+
+    public function testAnOrderInAnotherCategoryReadsNoShippedDates(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+        $unread = static function (array $ids): array {
+            throw new \LogicException('shipped dates read');
+        };
+
+        $source = $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'AE'), $unread);
+
+        self::assertNull($source->deliveryDate);
+        self::assertNull($source->deliverToCountryCode);
+    }
+
+    /**
+     * @return iterable<string, array{0: list<list<string>>, 1: string}>
+     */
+    public static function categoryKOrdersWithNoOneShippedDay(): iterable
+    {
+        $notShipped = 'Order SW10001 is in VAT category K, which needs the actual delivery date (BT-72, BR-IC-11), and a delivery of the order was never set to shipped. Set it to shipped, then generate the invoice again.';
+        $severalDays = 'Order SW10001 is in VAT category K, which needs one actual delivery date (BT-72, BR-IC-11), and its deliveries were set to shipped on more than one day, so the plugin cannot tell which date applies.';
+
+        yield 'not shipped' => [[[]], $notShipped];
+        yield 'one of two deliveries not shipped' => [[['2026-07-02'], []], $notShipped];
+        yield 'two deliveries shipped on two days' => [[['2026-07-02'], ['2026-07-03']], $severalDays];
+        yield 'two deliveries, the later shipping of one on another day' => [[['2026-07-02'], ['2026-07-01', '2026-07-03']], $severalDays];
+    }
+
+    /** Shopware moves a delivery from shipped to shipped again only through a cancel and a reopen. */
+    public function testADeliveryShippedAgainTakesTheLaterDay(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+
+        $source = $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'K'), $this->shippedOn($order, [['2026-07-09', '2026-07-02']]));
+
+        self::assertSame('2026-07-09', $source->deliveryDate);
+    }
+
+    /**
+     * @param list<list<string>> $days
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('categoryKOrdersWithNoOneShippedDay')]
+    public function testCategoryKStopsWithoutOneShippedDay(array $days, string $message): void
+    {
+        $order = $this->taxFreeOrder(array_fill(0, count($days), $this->austria()));
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage($message);
+        $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'K'), $this->shippedOn($order, $days));
+    }
+
+    public function testCategoryKWithNoShippedDatesGivenStops(): void
+    {
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('was never set to shipped');
+        $this->adapter->toSourceOrder($this->taxFreeOrder([$this->austria()]), $this->config(euBusiness: 'K'));
+    }
+
     public function testATaxFreeOrderToAnEuBusinessStopsWhenNoCategoryIsSet(): void
     {
         $this->expectException(MissingOrderDataException::class);
@@ -209,24 +304,30 @@ final class OrderAdapterTest extends TestCase
     public function testEveryTaxFreeStopFitsTheFailureField(): void
     {
         $orders = [
-            [$this->taxFreeOrder([$this->austria()]), $this->config()],
-            [$this->taxFreeOrder([$this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', null)]), $this->config()],
+            [$this->taxFreeOrder([$this->austria()]), $this->config(), null],
+            [$this->taxFreeOrder([$this->address('Bahnhofstr 3', '8001', 'Zurich', 'CH', null)]), $this->config(), null],
         ];
         foreach (self::taxFreeOrdersWithNoStatedCategory() as [$countries, $vatIds]) {
             $orders[] = [
                 $this->taxFreeOrder(array_map(fn (string $iso) => $this->address('Street 1', '1000', 'City', $iso, null, isEu: true), $countries), $vatIds),
                 $this->config(euBusiness: 'AE', nonEu: 'G'),
+                null,
             ];
         }
 
         $noDelivery = $this->taxFreeOrder([$this->austria()]);
         $noDelivery->setDeliveries(new OrderDeliveryCollection());
-        $orders[] = [$noDelivery, $this->config(euBusiness: 'AE')];
+        $orders[] = [$noDelivery, $this->config(euBusiness: 'AE'), null];
 
-        foreach ($orders as [$order, $config]) {
+        foreach (self::categoryKOrdersWithNoOneShippedDay() as [$days]) {
+            $order = $this->taxFreeOrder(array_fill(0, count($days), $this->austria()));
+            $orders[] = [$order, $this->config(euBusiness: 'K'), $this->shippedOn($order, $days)];
+        }
+
+        foreach ($orders as [$order, $config, $shippedDates]) {
             $order->setOrderNumber(str_repeat('9', 32));
             try {
-                $this->adapter->toSourceOrder($order, $config);
+                $this->adapter->toSourceOrder($order, $config, $shippedDates);
                 self::fail('no exception');
             } catch (MissingOrderDataException $e) {
                 self::assertLessThanOrEqual(255, mb_strlen($e->getMessage()), $e->getMessage());
@@ -610,6 +711,22 @@ final class OrderAdapterTest extends TestCase
             shippingMethods: array_fill(0, max(1, count($shipTo)), 'Standard'),
             shippingAddresses: $shipTo,
         );
+    }
+
+    /**
+     * The shipped dates DeliveryShippedDates would read: $days[i] for the
+     * order's delivery at index i.
+     *
+     * @param list<list<string>> $days
+     */
+    private function shippedOn(OrderEntity $order, array $days): \Closure
+    {
+        $byDelivery = [];
+        foreach (array_values($order->getDeliveries()?->getElements() ?? []) as $i => $delivery) {
+            $byDelivery[$delivery->getId()] = $days[$i] ?? [];
+        }
+
+        return static fn (array $ids): array => array_intersect_key($byDelivery, array_flip($ids));
     }
 
     private function austria(): OrderAddressEntity

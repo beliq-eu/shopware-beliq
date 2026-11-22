@@ -109,15 +109,18 @@ final class PluginConfigTest extends TestCase
         self::assertSame([], PluginConfigProvider::fromValues([])->exemptionReasons);
     }
 
-    public function testReverseChargeAndOutOfScopeReasonsAreMapped(): void
+    public function testTaxFreeCategoryReasonsAreMapped(): void
     {
         $config = PluginConfigProvider::fromValues([
             'reverseChargeReasonCode' => 'VATEX-EU-AE',
+            'intraCommunityReasonCode' => ' VATEX-EU-IC ',
+            'intraCommunityReasonText' => 'Intra-community supply',
             'outOfScopeReasonText' => ' Not subject to VAT ',
         ]);
 
         self::assertEquals([
             'AE' => new ExemptionReason('VATEX-EU-AE', null),
+            'K' => new ExemptionReason('VATEX-EU-IC', 'Intra-community supply'),
             'O' => new ExemptionReason(null, 'Not subject to VAT'),
         ], $config->exemptionReasons);
     }
@@ -137,16 +140,17 @@ final class PluginConfigTest extends TestCase
         self::assertSame('AE', $config->taxFreeEuBusinessCategory);
         self::assertSame('O', $config->taxFreeNonEuCategory);
         self::assertSame('G', PluginConfigProvider::fromValues(['taxFreeNonEu' => 'G'])->taxFreeNonEuCategory);
+        self::assertSame('K', PluginConfigProvider::fromValues(['taxFreeEuBusiness' => 'K'])->taxFreeEuBusinessCategory);
     }
 
     /**
      * Each setting offers its own categories. "stop", and a category the
-     * setting does not offer (K, or one meant for the other setting), state
+     * setting does not offer (one meant for the other setting, for one), state
      * none.
      */
     public function testATaxFreeCategoryTheSettingDoesNotOfferStatesNone(): void
     {
-        foreach (['stop', 'K', 'G', 'O', 'Z'] as $value) {
+        foreach (['stop', 'G', 'O', 'Z', 'k'] as $value) {
             self::assertNull(PluginConfigProvider::fromValues(['taxFreeEuBusiness' => $value])->taxFreeEuBusinessCategory, $value);
         }
         foreach (['stop', 'K', 'AE', 'E', 'Z'] as $value) {

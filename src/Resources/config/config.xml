@@ -276,8 +276,8 @@
             <name>taxFreeEuBusiness</name>
             <label>Tax-free orders to businesses in other EU countries</label>
             <label lang="de-DE">Steuerfreie Bestellungen an Unternehmen in anderen EU-Ländern</label>
-            <helpText>For an order Shopware marks tax free that ships to an EU country other than the seller's, to a buyer with a VAT ID. Shopware does not record why the order is tax free, so you state the VAT category for all its lines and its shipping: AE (reverse charge), or no e-invoice. Intra-community supply (K) is not offered. An order with no delivery, such as one of digital products only, names no shipping country and gets no e-invoice.</helpText>
-            <helpText lang="de-DE">Für eine Bestellung, die Shopware als steuerfrei kennzeichnet und die in ein anderes EU-Land als das des Verkäufers an einen Käufer mit USt-IdNr. geht. Shopware erfasst nicht, warum die Bestellung steuerfrei ist. Daher legen Sie die USt-Kategorie für alle Positionen und den Versand fest: AE (Reverse-Charge-Verfahren) oder keine E-Rechnung. Innergemeinschaftliche Lieferungen (K) werden nicht angeboten. Eine Bestellung ohne Lieferung, etwa nur mit digitalen Produkten, nennt kein Lieferland und erhält keine E-Rechnung.</helpText>
+            <helpText>For an order Shopware marks tax free that ships to an EU country other than the seller's, to a buyer with a VAT ID. Shopware does not record why the order is tax free, so you state the VAT category for all its lines and its shipping: AE (reverse charge), K (intra-community supply), or no e-invoice. An invoice in category K carries the shipping country (BT-80) and, as the actual delivery date (BT-72), the day the order's delivery was set to "Shipped": an order not yet shipped when the invoice is created gets no e-invoice. An order with no delivery, such as one of digital products only, names no shipping country and gets no e-invoice.</helpText>
+            <helpText lang="de-DE">Für eine Bestellung, die Shopware als steuerfrei kennzeichnet und die in ein anderes EU-Land als das des Verkäufers an einen Käufer mit USt-IdNr. geht. Shopware erfasst nicht, warum die Bestellung steuerfrei ist. Daher legen Sie die USt-Kategorie für alle Positionen und den Versand fest: AE (Reverse-Charge-Verfahren), K (innergemeinschaftliche Lieferung) oder keine E-Rechnung. Eine Rechnung der Kategorie K enthält das Lieferland (BT-80) und als tatsächliches Lieferdatum (BT-72) den Tag, an dem die Lieferung der Bestellung auf „Versandt“ gesetzt wurde. Eine Bestellung, die beim Erstellen der Rechnung noch nicht versandt ist, erhält keine E-Rechnung. Eine Bestellung ohne Lieferung, etwa nur mit digitalen Produkten, nennt kein Lieferland und erhält keine E-Rechnung.</helpText>
             <defaultValue>stop</defaultValue>
             <options>
                 <option>
@@ -288,6 +288,10 @@
                 <option>
                     <id>AE</id>
                     <name>AE - Reverse charge</name>
+                </option>
+                <option>
+                    <id>K</id>
+                    <name>K - Intra-community supply</name>
                 </option>
             </options>
         </input-field>
@@ -327,6 +331,20 @@
             <label lang="de-DE">Text des Befreiungsgrunds für Kategorie AE</label>
             <helpText>The text "Reverse charge", or the same standard text in another language (BT-120).</helpText>
             <helpText lang="de-DE">Der Text „Reverse charge“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>intraCommunityReasonCode</name>
+            <label>Exemption reason code for category K</label>
+            <label lang="de-DE">Code des Befreiungsgrunds für Kategorie K</label>
+            <helpText>A code from the VATEX code list (BT-121) that means "Intra-community supply". An invoice in category K needs this code or the text below (BR-IC-10). Without either, no invoice is created.</helpText>
+            <helpText lang="de-DE">Ein Code aus der VATEX-Codeliste (BT-121) mit der Bedeutung „Intra-community supply“. Eine Rechnung der Kategorie K braucht diesen Code oder den Text darunter (BR-IC-10). Fehlen beide, wird keine Rechnung erstellt.</helpText>
+        </input-field>
+        <input-field type="text">
+            <name>intraCommunityReasonText</name>
+            <label>Exemption reason text for category K</label>
+            <label lang="de-DE">Text des Befreiungsgrunds für Kategorie K</label>
+            <helpText>The text "Intra-community supply", or the same standard text in another language (BT-120).</helpText>
+            <helpText lang="de-DE">Der Text „Intra-community supply“ oder derselbe Standardtext in einer anderen Sprache (BT-120).</helpText>
         </input-field>
         <input-field type="text">
             <name>outOfScopeReasonCode</name>

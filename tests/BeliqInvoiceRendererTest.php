@@ -4,6 +4,7 @@ namespace Beliq\Shopware\Tests;
 
 use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
+use Beliq\Shopware\Document\DeliveryShippedDates;
 use Beliq\Shopware\Document\InvoiceDocumentLookup;
 use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Service\InvoiceMapper;
@@ -38,6 +39,9 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\Currency\CurrencyEntity;
+use Shopware\Core\System\StateMachine\Aggregation\StateMachineHistory\StateMachineHistoryCollection;
+use Shopware\Core\System\StateMachine\Aggregation\StateMachineHistory\StateMachineHistoryEntity;
+use Shopware\Core\System\StateMachine\Aggregation\StateMachineState\StateMachineStateEntity;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -375,6 +379,44 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame([], $http->calls);
     }
 
+    /**
+     * An order in category K sends, as its actual delivery date, the day the
+     * state machine history records its delivery was set to shipped.
+     */
+    public function testACategoryKOrderSendsTheDayItsDeliveryWasSetToShipped(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10053');
+        $order->setTaxStatus(CartPrice::TAX_STATE_FREE);
+        $order->getOrderCustomer()?->setVatIds(['ATU12345678']);
+        $country = new CountryEntity();
+        $country->setUniqueIdentifier(Uuid::randomHex());
+        $country->setId(Uuid::randomHex());
+        $country->setIso('AT');
+        $country->setIsEu(true);
+        $shipTo = $this->address('Ring 1', '1010', 'Wien', 'AT', 'Kaeufer GmbH');
+        $shipTo->setCountry($country);
+        $delivery = new OrderDeliveryEntity();
+        $delivery->setId(Uuid::randomHex());
+        $delivery->setUniqueIdentifier($delivery->getId());
+        $delivery->setShippingCosts($order->getShippingCosts());
+        $delivery->setShippingOrderAddress($shipTo);
+        $order->setDeliveries(new OrderDeliveryCollection([$delivery]));
+
+        $config = $this->config('xrechnung', 'xml', extra: [
+            'taxFreeEuBusiness' => 'K',
+            'intraCommunityReasonCode' => 'VATEX-EU-IC',
+        ]);
+        $result = $this->renderer($order, $config, $http, shipped: [[$delivery->getId(), '2026-07-02T08:00:00+00:00']])
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderError($order->getId()));
+        self::assertIsString($http->lastCall()['body']);
+        $sent = json_decode($http->lastCall()['body'], true);
+        self::assertSame(['date' => '2026-07-02', 'address' => ['countryCode' => 'AT']], $sent['invoice']['delivery']);
+        self::assertSame('K', $sent['invoice']['taxSummary'][0]['vatCategoryCode']);
+    }
+
     public function testATaxFreeOrderTheBusinessOnlySettingSkipsRecordsNoError(): void
     {
         $http = new FakeHttpClient(['status' => 200, 'body' => 'unused', 'headers' => []]);
@@ -400,6 +442,7 @@ final class BeliqInvoiceRendererTest extends TestCase
     /**
      * @param list<string> $existingNumbers numbers of the beliq documents already on the order
      * @param EntityRepository<OrderCollection>|null $orderRepository
+     * @param list<array{0: string, 1: string}> $shipped delivery id and time of each move from open to shipped
      */
     private function renderer(
         OrderEntity $order,
@@ -407,6 +450,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         FakeHttpClient $http,
         array $existingNumbers = [],
         ?EntityRepository $orderRepository = null,
+        array $shipped = [],
     ): BeliqInvoiceRenderer {
         if ($orderRepository === null) {
             $orderRepository = $this->createMock(EntityRepository::class);
@@ -428,8 +472,49 @@ final class BeliqInvoiceRendererTest extends TestCase
             new OrderAdapter(),
             new InvoiceMapper(),
             $this->lookup($existingNumbers),
+            $this->shippedDates($shipped),
             $http,
         );
+    }
+
+    /**
+     * @param list<array{0: string, 1: string}> $shipped
+     */
+    private function shippedDates(array $shipped): DeliveryShippedDates
+    {
+        $state = static function (string $technicalName): StateMachineStateEntity {
+            $state = new StateMachineStateEntity();
+            $state->setId(Uuid::randomHex());
+            $state->setUniqueIdentifier($state->getId());
+            $state->setTechnicalName($technicalName);
+
+            return $state;
+        };
+        $entries = [];
+        foreach ($shipped as [$deliveryId, $at]) {
+            $entry = new StateMachineHistoryEntity();
+            $entry->setId(Uuid::randomHex());
+            $entry->setUniqueIdentifier($entry->getId());
+            $entry->setReferencedId($deliveryId);
+            $entry->setFromStateMachineState($state('open'));
+            $entry->setToStateMachineState($state('shipped'));
+            $entry->setCreatedAt(new \DateTimeImmutable($at));
+            $entries[] = $entry;
+        }
+
+        $repository = $this->createMock(EntityRepository::class);
+        $repository->method('search')->willReturnCallback(
+            static fn (Criteria $criteria, Context $context): EntitySearchResult => new EntitySearchResult(
+                'state_machine_history',
+                count($entries),
+                new StateMachineHistoryCollection($entries),
+                null,
+                $criteria,
+                $context,
+            ),
+        );
+
+        return new DeliveryShippedDates($repository);
     }
 
     /**
@@ -522,7 +607,10 @@ final class BeliqInvoiceRendererTest extends TestCase
      * A real PluginConfigProvider over a mocked SystemConfigService, so the config
      * resolution the renderer depends on is exercised for real rather than doubled.
      */
-    private function config(string $standard, string $output, bool $businessOnly = true): PluginConfigProvider
+    /**
+     * @param array<string, mixed> $extra
+     */
+    private function config(string $standard, string $output, bool $businessOnly = true, array $extra = []): PluginConfigProvider
     {
         $values = [
             'enabled' => true,
@@ -539,7 +627,7 @@ final class BeliqInvoiceRendererTest extends TestCase
             'sellerCity' => 'Berlin',
             'sellerPostalCode' => '10115',
             'sellerCountryCode' => 'DE',
-        ];
+        ] + $extra;
 
         $systemConfig = $this->createMock(SystemConfigService::class);
         $systemConfig->method('get')->willReturnCallback(

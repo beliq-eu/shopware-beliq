@@ -98,23 +98,32 @@ for two kinds of order, decided by the country of the order's shipping address:
 
 | Setting | The order ships | Categories offered |
 |---|---|---|
-| Tax-free orders to businesses in other EU countries | to an EU country other than the seller's, to a buyer with a VAT ID | `AE` reverse charge |
+| Tax-free orders to businesses in other EU countries | to an EU country other than the seller's, to a buyer with a VAT ID | `AE` reverse charge, `K` intra-community supply |
 | Tax-free orders outside the EU | to a country Shopware does not mark as an EU member | `G` export outside the EU, `O` not subject to VAT |
 
 Both settings default to no e-invoice. Every line and the shipping of the order
 take the category you choose, at 0%. Each category needs its exemption reason
-(BR-AE-10, BR-G-10, BR-O-10): `AE` and `O` have their own reason settings, and
-`G` uses the reason for `G` above. An invoice in category `O` carries no VAT ID,
+(BR-AE-10, BR-IC-10, BR-G-10, BR-O-10): `AE`, `K` and `O` have their own reason
+settings, and `G` uses the reason for `G` above. An invoice in category `O` carries no VAT ID,
 neither the seller's nor the buyer's (BR-O-02), so it names the seller by the
 company registration number (BT-30, BR-CO-26), which you then need to set.
+
+An invoice in category `K` carries the deliver-to country (BT-80, BR-IC-12),
+the country of the order's shipping address, and the actual delivery date
+(BT-72, BR-IC-11). Shopware records no delivery date, so the plugin takes the
+day the order's delivery was set to "Shipped", from Shopware's state history,
+as a UTC date. An order whose delivery is not shipped when the invoice is
+created gets no invoice: under the trigger "Payment is marked paid", an order
+paid before it ships stops at payment, and you create the document by hand
+once it has shipped. A delivery set to shipped again after a cancel counts on
+the later day. Deliveries set to shipped on different days give no one date,
+and the order gets no invoice either.
 
 Any other tax-free order gets no invoice: one shipped within the seller's
 country, to an EU buyer without a VAT ID, or to several countries, and one with
 no delivery at all. Shopware creates no delivery for a cart of digital
 products only, so such an order names no shipping country. The failure
-on the order says why, and no beliq call is made. Intra-community supply (`K`)
-is not offered, because its invoice needs the actual delivery date (BT-72) and
-the deliver-to country (BT-80), which the plugin does not send.
+on the order says why, and no beliq call is made.
 
 ## Install
 
@@ -144,7 +153,8 @@ In the plugin settings (Extensions -> beliq e-invoicing -> Configure):
   category (see Scope of generation).
 - If your shop has tax-free orders, choose their category in the two settings
   for tax-free orders, and enter the exemption reason for it. Category `O`
-  also needs the company registration number (see Tax-free orders).
+  also needs the company registration number, and category `K` a delivery set
+  to shipped before the invoice is created (see Tax-free orders).
 - Turn on `Generate invoices automatically`. Generation is off until you do.
 
 The generated document is stored as a beliq e-invoice document on the order (its

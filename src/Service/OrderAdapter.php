@@ -33,9 +33,10 @@ use Shopware\Core\System\Country\CountryEntity;
  * order figures in the order's tax status, so a gross order has its per-line tax
  * subtracted back out. An order Shopware marks tax free puts every line at 0% in
  * the VAT category the merchant stated for where the order ships; Shopware records
- * that no VAT was charged, not why, and the category depends on why. The seller
- * comes from plugin config, the buyer from the order's billing address and
- * customer.
+ * that no VAT was charged, not why, and the category depends on why. In category
+ * K (intra-community supply) the order also carries the actual delivery date and
+ * the deliver-to country. The seller comes from plugin config, the buyer from the
+ * order's billing address and customer.
  */
 final class OrderAdapter
 {
@@ -49,12 +50,26 @@ final class OrderAdapter
     private const TAX_FREE_EU_BUSINESS_SETTING = 'Tax-free orders to businesses in other EU countries';
     private const TAX_FREE_NON_EU_SETTING = 'Tax-free orders outside the EU';
 
-    public function toSourceOrder(OrderEntity $order, PluginConfig $config): SourceOrder
+    private const INTRA_COMMUNITY_CATEGORY = 'K';
+
+    /**
+     * @param (\Closure(list<string>): array<string, list<string>>)|null $shippedDates
+     *     per delivery id, the Y-m-d dates the delivery was set to shipped
+     *     (DeliveryShippedDates); read only for an order in category K
+     */
+    public function toSourceOrder(OrderEntity $order, PluginConfig $config, ?\Closure $shippedDates = null): SourceOrder
     {
         $taxStatus = $order->getTaxStatus() ?? $order->getPrice()->getTaxStatus();
         $taxFreeCategory = $taxStatus === CartPrice::TAX_STATE_FREE
             ? $this->taxFreeCategory($order, $config)
             : null;
+
+        $deliveryDate = null;
+        $deliverToCountry = null;
+        if ($taxFreeCategory === self::INTRA_COMMUNITY_CATEGORY) {
+            $deliveryDate = $this->shippedDate($order, $shippedDates ?? static fn (array $ids): array => []);
+            $deliverToCountry = strtoupper($this->shippingCountry($order)?->getIso() ?? '');
+        }
 
         $lines = [];
         foreach ($order->getLineItems() ?? [] as $item) {
@@ -69,7 +84,7 @@ final class OrderAdapter
             $lines[] = $line;
         }
 
-        return $this->sourceOrder($order, $config, $lines);
+        return $this->sourceOrder($order, $config, $lines, $deliveryDate, $deliverToCountry);
     }
 
     /**
@@ -85,8 +100,13 @@ final class OrderAdapter
     /**
      * @param list<SourceLine> $lines
      */
-    private function sourceOrder(OrderEntity $order, PluginConfig $config, array $lines): SourceOrder
-    {
+    private function sourceOrder(
+        OrderEntity $order,
+        PluginConfig $config,
+        array $lines,
+        ?string $deliveryDate = null,
+        ?string $deliverToCountry = null,
+    ): SourceOrder {
         $customer = $order->getOrderCustomer();
         $billing = $order->getBillingAddress();
 
@@ -114,6 +134,8 @@ final class OrderAdapter
             buyerFlaggedBusiness: $flaggedBusiness,
             zeroRateCategory: $config->zeroRateCategory,
             exemptionReasons: $config->exemptionReasons,
+            deliveryDate: $deliveryDate,
+            deliverToCountryCode: $deliverToCountry,
         );
     }
 
@@ -154,6 +176,37 @@ final class OrderAdapter
 
         return $config->taxFreeEuBusinessCategory
             ?? throw MissingOrderDataException::taxFreeCategoryNotSet($label, 'to a business in another EU country', self::TAX_FREE_EU_BUSINESS_SETTING);
+    }
+
+    /**
+     * The actual delivery date (BT-72) of an order in category K, which BR-IC-11
+     * requires unless the invoice has an invoicing period, which the plugin does
+     * not map. It is the day every delivery of the order was set to shipped. A
+     * delivery set to shipped again after a cancel counts on the later day, the
+     * shipping that stood. A delivery never set to shipped, or deliveries set to
+     * shipped on different days, give no one date, and there is no invoice.
+     *
+     * @param \Closure(list<string>): array<string, list<string>> $shippedDates
+     */
+    private function shippedDate(OrderEntity $order, \Closure $shippedDates): string
+    {
+        $label = $order->getOrderNumber() ?? $order->getId();
+        $deliveries = $order->getDeliveries()?->getElements() ?? [];
+        $byDelivery = $shippedDates(array_values(array_map(static fn ($delivery): string => $delivery->getId(), $deliveries)));
+
+        $days = [];
+        foreach ($deliveries as $delivery) {
+            $own = $byDelivery[$delivery->getId()] ?? [];
+            if ($own === []) {
+                throw MissingOrderDataException::intraCommunityNotShipped($label);
+            }
+            $days[max($own)] = true;
+        }
+        if (count($days) !== 1) {
+            throw MissingOrderDataException::intraCommunitySeveralShippedDates($label);
+        }
+
+        return (string) array_key_first($days);
     }
 
     /**
