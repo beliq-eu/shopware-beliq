@@ -81,8 +81,9 @@ none.
 
 EN 16931 requires a VAT exemption reason, a code from the VATEX code list
 (BT-121) or a text (BT-120), for category `E` (BR-E-10) and `G` (BR-G-10), and
-forbids one for `Z` (BR-Z-10) and `S` (BR-S-10). The settings hold one reason
-for `E` and one for `G`, and the plugin sends it as you enter it on the VAT
+forbids one for `Z` (BR-Z-10) and `S` (BR-S-10). For 0% lines the settings
+hold one reason for `E` and one for `G` (the reasons for tax-free orders are
+under Tax-free orders), and the plugin sends it as you enter it on the VAT
 breakdown of that category. An order with lines in `E` or `G` and no reason
 set for that category gets no invoice: the failure on the order names the
 category and the rule, and no beliq call is made. The category and its reason
