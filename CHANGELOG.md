@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.8 (2026-11-22)
 
 - An order Shopware marks tax free can get an invoice again, in the VAT
   category you state for where it ships. Two new settings, both set to no
