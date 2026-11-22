@@ -244,6 +244,30 @@ function stubLastGenerate(string $baseUrl): array
     return $body;
 }
 
+/**
+ * A document created again is a new invoice, so its invoice number (BT-1) is its
+ * document number. A stub run reads the request; against the API, the stored XML.
+ *
+ * @param array<string, mixed> $document the document as the Admin API lists it
+ */
+function checkInvoiceNumber(array $document, string $number, bool $stub, string $baseUrl): void
+{
+    if ($stub) {
+        $sent = stubLastGenerate($baseUrl)['invoice']['number'] ?? null;
+        check($sent === $number, 'the generate request carries ' . $number . ' as its invoice number (got ' . json_encode($sent) . ')');
+
+        return;
+    }
+    $download = http('GET', SHOP . '/api/_action/document/' . $document['id'] . '/' . $document['deepLinkCode'] . '?fileType=xml', ['Authorization: Bearer ' . adminToken()]);
+    $xml = new DOMDocument();
+    $id = null;
+    if ($download['status'] === 200 && $xml->loadXML($download['body'], LIBXML_NONET)) {
+        // BT-1: rsm:ExchangedDocument/ram:ID in CII, the root's cbc:ID in UBL.
+        $id = (new DOMXPath($xml))->evaluate("string(/*[local-name()='CrossIndustryInvoice']/*[local-name()='ExchangedDocument']/*[local-name()='ID'] | /*[local-name()='Invoice']/*[local-name()='ID'])");
+    }
+    check($id === $number, 'the stored document carries ' . $number . ' as its invoice number (got ' . json_encode($id) . ')');
+}
+
 function orderCustomFields(string $orderId): array
 {
     return search('order', ['ids' => [$orderId]])[0]['customFields'] ?? [];
@@ -749,6 +773,7 @@ try {
     $manual = beliqDocuments($firstOrder['id']);
     check(count($manual) === 2, 'creating the document by hand adds a second one');
     check(($manual[1]['config']['documentNumber'] ?? null) === $firstOrder['number'] . '-2', 'the second document is numbered ' . $firstOrder['number'] . '-2');
+    checkInvoiceNumber($manual[1], $firstOrder['number'] . '-2', $stub, $baseUrl);
 } catch (Throwable $e) {
     check(false, 'the idempotency case raised ' . $e->getMessage());
 }
@@ -775,6 +800,32 @@ try {
     check($numbers === [$n, $n . '-3', $n . '-4'], 'the new document is numbered ' . $n . '-4 (numbers: ' . implode(', ', $numbers) . ')');
 } catch (Throwable $e) {
     check(false, 'the deleted-document case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: another order's own number in the suffix form is skipped ==\n";
+try {
+    if ($firstOrder === null) {
+        throw new RuntimeException('no order from the first case');
+    }
+    // Shopware's duplicate check spans the beliq documents of every order. An
+    // order numbered <order>-5 takes that number for its own first document, so a
+    // create on <order>, which holds up to <order>-4, must skip it.
+    $n = $firstOrder['number'];
+    $other = placeOrder($shop, $product19, 1, $germanBuyer);
+    admin('PATCH', '/order/' . $other['id'], ['orderNumber' => $n . '-5']);
+    transition($other['id'], 'paid');
+    $otherNumbers = array_column(beliqDocuments($other['id']), 'documentNumber');
+    check($otherNumbers === [$n . '-5'], 'the order numbered ' . $n . '-5 holds its own number (numbers: ' . implode(', ', $otherNumbers) . ')');
+    $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $firstOrder['id']]]);
+    check(($create['errors'] ?? []) === [], 'the create on ' . $n . ' succeeds (' . json_encode($create['errors'] ?? []) . ')');
+    $documents = beliqDocuments($firstOrder['id']);
+    $numbers = array_column($documents, 'documentNumber');
+    check($numbers === [$n, $n . '-3', $n . '-4', $n . '-6'], 'the new document is numbered ' . $n . '-6 (numbers: ' . implode(', ', $numbers) . ')');
+    if (count($documents) === 4) {
+        checkInvoiceNumber($documents[3], $n . '-6', $stub, $baseUrl);
+    }
+} catch (Throwable $e) {
+    check(false, 'the other-order number case raised ' . $e->getMessage());
 }
 
 echo "\n== Case: the admin's Preview makes no beliq call ==\n";

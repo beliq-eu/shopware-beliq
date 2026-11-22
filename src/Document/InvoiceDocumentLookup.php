@@ -7,12 +7,14 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\OrFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\PrefixFilter;
 
 /**
  * Reads the beliq invoice documents already attached to an order. The generation
  * trigger skips a re-fired transition once a document exists (auto generation
- * never overwrites), and the renderer picks a number no document on the order
- * holds, because Shopware rejects a duplicate document number.
+ * never overwrites), and the renderer picks a number no beliq document holds,
+ * because Shopware rejects a duplicate document number.
  */
 final class InvoiceDocumentLookup
 {
@@ -40,22 +42,29 @@ final class InvoiceDocumentLookup
      * number counting as 1. A count would hand out a number still in use once a
      * merchant deletes an earlier document. A number in neither form is never
      * handed out, so it does not count.
+     *
+     * The numbers are read from the beliq documents of every order, because
+     * Shopware's duplicate check spans them all: with dashes in the order number
+     * range, another order's own number can have this order's suffix form (order
+     * `A-1-2` next to order `A-1`). The numbers compare without regard to case,
+     * as that check does under MySQL's default collation.
      */
-    public function nextNumber(string $orderId, string $orderNumber, Context $context): string
+    public function nextNumber(string $orderNumber, Context $context): string
     {
         $criteria = new Criteria();
-        $criteria->addFilter(new EqualsFilter('orderId', $orderId));
         $criteria->addFilter(new EqualsFilter('documentType.technicalName', BeliqInvoiceRenderer::TYPE));
+        $criteria->addFilter(new OrFilter([
+            new EqualsFilter('documentNumber', $orderNumber),
+            new PrefixFilter('documentNumber', $orderNumber . '-'),
+        ]));
 
-        $suffix = '/^' . preg_quote($orderNumber, '/') . '-([1-9][0-9]*)$/D';
+        $form = '/^' . preg_quote($orderNumber, '/') . '(?:-([1-9][0-9]*))?$/iuD';
         $documents = $this->documentRepository->search($criteria, $context)->getEntities();
         $highest = 0;
         foreach ($documents as $document) {
             $number = $document->getDocumentNumber();
-            if ($number === $orderNumber) {
-                $highest = max($highest, 1);
-            } elseif ($number !== null && preg_match($suffix, $number, $match) === 1) {
-                $highest = max($highest, (int) $match[1]);
+            if ($number !== null && preg_match($form, $number, $match) === 1) {
+                $highest = max($highest, isset($match[1]) ? (int) $match[1] : 1);
             }
         }
 

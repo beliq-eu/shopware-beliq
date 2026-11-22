@@ -106,7 +106,8 @@ final class BeliqInvoiceRendererTest extends TestCase
         // One beliq invoice already exists for the order. A regenerate must not reuse
         // SW10042 (Shopware rejects a duplicate document number), so it takes the next
         // distinct number instead of failing.
-        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingNumbers: ['SW10042'])
+        $config = $this->config('zugferd', 'xml', extra: ['sellerIban' => 'DE02120300000000202051']);
+        $result = $this->renderer($order, $config, $http, existingNumbers: ['SW10042'])
             ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
 
         $doc = $result->getOrderSuccess($order->getId());
@@ -114,6 +115,13 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame('SW10042-2', $doc->getNumber());
         self::assertSame('invoice-SW10042-2', $doc->getName());
         self::assertSame('SW10042-2', $doc->getConfig()['documentNumber'] ?? null);
+
+        // A regenerate is a new invoice, so the e-invoice carries the document's
+        // number as its invoice number (BT-1). The order number stays the payment
+        // reference (BT-83).
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertSame('SW10042-2', $sent['invoice']['number']);
+        self::assertSame('SW10042', $sent['invoice']['paymentMeans']['paymentReference'] ?? null);
     }
 
     public function testRegenerateAfterADeletedDocumentTakesANumberNoDocumentHolds(): void
@@ -132,6 +140,8 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertNotNull($doc);
         self::assertSame('SW10042-4', $doc->getNumber());
         self::assertSame('SW10042-4', $doc->getConfig()['documentNumber'] ?? null);
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertSame('SW10042-4', $sent['invoice']['number']);
     }
 
     public function testThePreviewIsALocalNoticeAndMakesNoBeliqCall(): void
