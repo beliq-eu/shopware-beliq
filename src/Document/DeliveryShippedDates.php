@@ -45,8 +45,10 @@ final class DeliveryShippedDates
         $criteria->addAssociation('fromStateMachineState');
         $criteria->addAssociation('toStateMachineState');
 
+        $history = $this->historyRepository->search($criteria, $context)->getEntities();
+
         $dates = [];
-        foreach ($this->historyRepository->search($criteria, $context)->getEntities() as $entry) {
+        foreach ($history as $entry) {
             if ($entry->getToStateMachineState()?->getTechnicalName() !== OrderDeliveryStates::STATE_SHIPPED
                 || $entry->getFromStateMachineState()?->getTechnicalName() === OrderDeliveryStates::STATE_SHIPPED
             ) {
