@@ -129,10 +129,10 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     continue;
                 }
 
-                $documentNumber = $this->documents->nextNumber($operation->getOrderId(), $source->number, $context);
+                $documentNumber = $this->documents->nextNumber($source->number, $context);
 
                 $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
-                $generated = $client->generate($body);
+                $generated = $client->generate(self::withInvoiceNumber($body, $documentNumber));
 
                 $isPdf = str_contains($generated['contentType'], 'pdf');
                 // The 6.7 signature. 6.6 has a leading `string $html` parameter, so
@@ -152,6 +152,27 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         }
 
         return $result;
+    }
+
+    /**
+     * A document created again is a new invoice, not a copy: the order can change
+     * between two creates. So the invoice number (BT-1) is the document's own
+     * number, which is the order number for the first document and
+     * `<order>-<n>` for a later one. The order number stays the payment
+     * reference and the fallback buyer reference.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
+     */
+    private static function withInvoiceNumber(array $body, string $number): array
+    {
+        if (!is_array($body['invoice'] ?? null)) {
+            throw new \LogicException('The generate body has no invoice.');
+        }
+        $body['invoice']['number'] = $number;
+
+        return $body;
     }
 
     public function getDecorated(): AbstractDocumentRenderer

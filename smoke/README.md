@@ -41,9 +41,14 @@ configured reason, and the others carry none. More cases:
   document that validates; a stub run checks that every line is `O`, the
   breakdown carries the reason, and neither party carries a VAT ID;
 - a second paid transition stores no second document;
-- creating the document by hand adds one numbered `<order>-2`;
+- creating the document by hand adds one numbered `<order>-2`, and its
+  invoice number is `<order>-2` too (a stub run reads the request, a run
+  against the API the stored XML);
 - after `<order>-3` is added and `<order>-2` deleted, a create by hand
   succeeds as `<order>-4`;
+- another order renumbered `<order>-5` takes that number for its own
+  document, and a create by hand on the first order succeeds as `<order>-6`,
+  with that invoice number;
 - the admin's Preview returns the plugin's local notice, stores nothing and,
   in a stub run, makes no generate call.
 
@@ -56,7 +61,7 @@ BELIQ_API_KEY=... BELIQ_BASE_URL=https://api.beliq.eu ./run.sh
 ```
 
 `BELIQ_BASE_URL` is resolved inside the container, so an API on this machine is
-`http://host.docker.internal:<port>`. One run makes 9 generate and 6 validate
+`http://host.docker.internal:<port>`. One run makes 11 generate and 6 validate
 calls with the key.
 
 ```bash

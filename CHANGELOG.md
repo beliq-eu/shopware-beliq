@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- A beliq document created again by hand is a new invoice, and its invoice
+  number (BT-1) is now its document number, `<order number>-<n>`. Up to 0.2.9
+  every beliq document of an order carried the order number as its invoice
+  number, so two documents with different content could carry one invoice
+  number. The first document still carries the order number. The payment
+  reference stays the order number.
+- The number of a new beliq document also skips the numbers of other orders'
+  beliq documents. With dashes in the order numbers, another order's own
+  number could have the regenerate form (order `A-1-2` next to order `A-1`),
+  and the create failed with "Document number already exists".
+
 ## 0.2.9 (2026-11-22)
 
 - Intra-community supply (`K`) is offered for "Tax-free orders to businesses
