@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.7 (2026-11-22)
 
 - An order Shopware marks tax free gets no invoice. Shopware records that it
   charged no VAT, not why, so the plugin cannot tell which VAT category
