@@ -205,7 +205,17 @@ final class OrderAdapterTest extends TestCase
         yield 'not shipped' => [[[]], $notShipped];
         yield 'one of two deliveries not shipped' => [[['2026-07-02'], []], $notShipped];
         yield 'two deliveries shipped on two days' => [[['2026-07-02'], ['2026-07-03']], $severalDays];
-        yield 'one delivery shipped on two days' => [[['2026-07-02', '2026-07-09']], $severalDays];
+        yield 'two deliveries, the later shipping of one on another day' => [[['2026-07-02'], ['2026-07-01', '2026-07-03']], $severalDays];
+    }
+
+    /** Shopware moves a delivery from shipped to shipped again only through a cancel and a reopen. */
+    public function testADeliveryShippedAgainTakesTheLaterDay(): void
+    {
+        $order = $this->taxFreeOrder([$this->austria()]);
+
+        $source = $this->adapter->toSourceOrder($order, $this->config(euBusiness: 'K'), $this->shippedOn($order, [['2026-07-09', '2026-07-02']]));
+
+        self::assertSame('2026-07-09', $source->deliveryDate);
     }
 
     /**

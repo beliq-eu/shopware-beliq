@@ -164,6 +164,17 @@ final class InvoiceMapperTest extends TestCase
         $this->mapper->toGenerateBody($order, 'xrechnung');
     }
 
+    /** The missing-reason message sends the merchant to the plugin settings, so each category needs one. */
+    public function testEveryCategoryThatNeedsAReasonHasASetting(): void
+    {
+        $required = (new \ReflectionClassConstant(InvoiceMapper::class, 'REASON_REQUIRED'))->getValue();
+        $settings = (new \ReflectionClassConstant(\Beliq\Shopware\Config\PluginConfigProvider::class, 'EXEMPTION_REASON_KEYS'))->getValue();
+        self::assertIsArray($required);
+        self::assertIsArray($settings);
+
+        self::assertSame([], array_values(array_diff(array_keys($required), array_keys($settings))));
+    }
+
     public function testTaxFreeCategoryReasonsAreSettings(): void
     {
         foreach (['AE' => 'BR-AE-10', 'K' => 'BR-IC-10', 'O' => 'BR-O-10'] as $category => $rule) {

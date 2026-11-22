@@ -668,8 +668,11 @@ try {
             check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call');
         }
 
+        // The day is read before and after the ship, so a run across midnight UTC
+        // accepts either.
+        $shipDays = [gmdate('Y-m-d')];
         shipDeliveries($order['id']);
-        $shippedOn = gmdate('Y-m-d');
+        $shipDays[] = gmdate('Y-m-d');
         $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $order['id']]]);
         check(($create['errors'] ?? []) === [], 'after shipping, creating the document succeeds (' . json_encode($create['errors'] ?? []) . ')');
         $documents = beliqDocuments($order['id']);
@@ -679,8 +682,9 @@ try {
             [$lines, $summary] = sentCategories($invoice);
             check($lines !== [] && array_unique($lines, SORT_REGULAR) === [['K', 0.0]], 'every line of the request is K at 0% (' . json_encode($lines) . ')');
             check($summary === [['K', 'VATEX-EU-IC', 'Intra-community supply']], 'the request has one K breakdown with the configured reason (' . json_encode($summary) . ')');
+            $delivery = $invoice['delivery'] ?? null;
             check(
-                ($invoice['delivery'] ?? null) === ['date' => $shippedOn, 'address' => ['countryCode' => 'AT']],
+                is_array($delivery) && in_array($delivery['date'] ?? null, $shipDays, true) && ($delivery['address'] ?? null) === ['countryCode' => 'AT'],
                 'the request carries the shipping day and AT as the delivery (BT-72, BT-80) (' . json_encode($invoice['delivery'] ?? null) . ')',
             );
         }

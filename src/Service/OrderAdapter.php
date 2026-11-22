@@ -182,8 +182,9 @@ final class OrderAdapter
      * The actual delivery date (BT-72) of an order in category K, which BR-IC-11
      * requires unless the invoice has an invoicing period, which the plugin does
      * not map. It is the day every delivery of the order was set to shipped. A
-     * delivery never set to shipped, or deliveries set to shipped on different
-     * days, give no one date, and there is no invoice.
+     * delivery set to shipped again after a cancel counts on the later day, the
+     * shipping that stood. A delivery never set to shipped, or deliveries set to
+     * shipped on different days, give no one date, and there is no invoice.
      *
      * @param \Closure(list<string>): array<string, list<string>> $shippedDates
      */
@@ -199,9 +200,7 @@ final class OrderAdapter
             if ($own === []) {
                 throw MissingOrderDataException::intraCommunityNotShipped($label);
             }
-            foreach ($own as $day) {
-                $days[$day] = true;
-            }
+            $days[max($own)] = true;
         }
         if (count($days) !== 1) {
             throw MissingOrderDataException::intraCommunitySeveralShippedDates($label);
