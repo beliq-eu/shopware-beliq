@@ -241,6 +241,83 @@ function orderCustomFields(string $orderId): array
     return search('order', ['ids' => [$orderId]])[0]['customFields'] ?? [];
 }
 
+/**
+ * Runs $case with the country's company tax setting on, which makes a company
+ * buyer's order to it tax free, and turns the setting off again after.
+ */
+function withCompanyTax(string $countryId, string $iso, callable $case): void
+{
+    try {
+        admin('PATCH', '/country/' . $countryId, ['companyTax' => ['enabled' => true, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
+        $case();
+    } finally {
+        try {
+            admin('PATCH', '/country/' . $countryId, ['companyTax' => ['enabled' => false, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
+        } catch (Throwable $e) {
+            check(false, 'restoring the company tax setting of ' . $iso . ' raised ' . $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Pays a tax-free order and checks that it got one XRechnung document that
+ * validates. Against the stub the stored bytes are a placeholder, so the
+ * generate request is what shows the category reached beliq: $checkRequest
+ * reads it.
+ *
+ * @param callable(array<string, mixed>): void $checkRequest
+ */
+function checkTaxFreeInvoice(array $order, bool $stub, string $baseUrl, BeliqClient $client, callable $checkRequest): void
+{
+    $taxStatus = search('order', ['ids' => [$order['id']]])[0]['taxStatus'] ?? null;
+    check($taxStatus === 'tax-free', 'Shopware recorded the order as tax free (got ' . json_encode($taxStatus) . ')');
+    $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+    transition($order['id'], 'paid');
+
+    $documents = beliqDocuments($order['id']);
+    $failure = orderCustomFields($order['id'])[FAILURE_FIELD] ?? null;
+    check(count($documents) === 1, 'the paid transition stored exactly one beliq_invoice document');
+    check($failure === null, 'no failure recorded on the order (' . json_encode($failure) . ')');
+    if (count($documents) !== 1) {
+        return;
+    }
+    if ($stub) {
+        check(stubGenerateCount($baseUrl) === $generatesBefore + 1, 'the paid transition made one generate call');
+        $checkRequest(stubLastGenerate($baseUrl)['invoice'] ?? []);
+    }
+
+    $document = $documents[0];
+    $download = http(
+        'GET',
+        SHOP . '/api/_action/document/' . $document['id'] . '/' . $document['deepLinkCode'] . '?fileType=xml',
+        ['Authorization: Bearer ' . adminToken()],
+    );
+    check($download['status'] === 200, 'the document downloads through the Admin API');
+    $result = $client->validate($download['body'], 'application/xml', 'cii');
+    $errors = is_array($result['errors'] ?? null) ? $result['errors'] : [];
+    check(($result['valid'] ?? false) === true && $errors === [], 'the stored document validates green ('
+        . ($result['format'] ?? '?') . '/' . ($result['profileDetected'] ?? '?') . ')');
+    foreach (array_slice($errors, 0, 5) as $error) {
+        echo '        ERR ' . ($error['ruleId'] ?? '?') . ': ' . ($error['message'] ?? '') . "\n";
+    }
+}
+
+/**
+ * @param array<string, mixed> $invoice a generate request's invoice
+ * @return array{0: list<array{0: mixed, 1: float}>, 1: list<array{0: mixed, 1: mixed, 2: mixed}>}
+ *     each line's category and rate, and each breakdown's category and reason
+ */
+function sentCategories(array $invoice): array
+{
+    return [
+        array_map(static fn (array $line): array => [$line['vatCategoryCode'] ?? null, (float) ($line['vatRate'] ?? -1)], $invoice['lines'] ?? []),
+        array_map(
+            static fn (array $row): array => [$row['vatCategoryCode'] ?? null, $row['exemptionReasonCode'] ?? null, $row['exemptionReasonText'] ?? null],
+            $invoice['taxSummary'] ?? [],
+        ),
+    ];
+}
+
 $apiKey = getenv('BELIQ_API_KEY') ?: '';
 $baseUrl = getenv('BELIQ_BASE_URL') ?: '';
 $stub = getenv('BELIQ_SMOKE_STUB') === '1';
@@ -260,9 +337,12 @@ $channel = search('sales-channel', [
     'associations' => ['domains' => new stdClass()],
 ])[0];
 $countries = [];
-foreach (search('country', ['filter' => [['type' => 'equalsAny', 'field' => 'iso', 'value' => ['DE', 'FR', 'AT']]]]) as $country) {
+$isEu = [];
+foreach (search('country', ['filter' => [['type' => 'equalsAny', 'field' => 'iso', 'value' => ['DE', 'FR', 'AT', 'CH']]]]) as $country) {
     $countries[$country['iso']] = $country['id'];
+    $isEu[$country['iso']] = $country['isEu'] ?? null;
 }
+check(($isEu['AT'] ?? null) === true && ($isEu['CH'] ?? null) === false, 'Shopware marks AT as an EU member and CH as not (' . json_encode($isEu) . ')');
 $shop = [
     'accessKey' => $channel['accessKey'],
     'domain' => $channel['domains'][0]['url'],
@@ -381,6 +461,13 @@ $base = [
     'exemptReasonText' => '',
     'exportReasonCode' => '',
     'exportReasonText' => '',
+    'taxFreeEuBusiness' => 'stop',
+    'taxFreeNonEu' => 'stop',
+    'reverseChargeReasonCode' => '',
+    'reverseChargeReasonText' => '',
+    'outOfScopeReasonCode' => '',
+    'outOfScopeReasonText' => '',
+    'sellerRegistrationId' => '',
     'paymentMeansCode' => '58',
 ];
 $client = new BeliqClient($apiKey, $baseUrl, new CurlHttpClient(120));
@@ -486,40 +573,84 @@ try {
     check(false, 'the missing-reason case raised ' . $e->getMessage());
 }
 
-echo "\n== Case: a tax-free order gets no invoice ==\n";
 // Austria's company tax setting makes a company buyer with a VAT ID tax free, as
 // a shop selling to intra-EU businesses sets it up. Shopware then records the
-// order as tax free without a VAT ground, so no category can be named for it.
+// order as tax free without a VAT ground, so the merchant states the category.
+$austrianCompany = ['country' => 'AT', 'city' => 'Wien', 'zipcode' => '1010', 'company' => 'Kaeufer GmbH', 'vatId' => 'ATU12345678'];
+
+echo "\n== Case: a tax-free order to an EU business gets no invoice until the merchant states its category ==\n";
 // Category E with its reason is set: up to 0.2.6 this order validated as exempt.
-$austria = $shop['countries']['AT'] ?? null;
 try {
-    if ($austria === null) {
-        throw new RuntimeException('the country search returned no AT');
-    }
     configure(array_merge($base, $cases['German XRechnung, VAT exempt (xml)']['config']));
-    admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => true, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
-    $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
-    $taxFree = placeOrder($shop, $product19, 1, ['country' => 'AT', 'city' => 'Wien', 'zipcode' => '1010', 'company' => 'Kaeufer GmbH', 'vatId' => 'ATU12345678']);
-    $taxStatus = search('order', ['ids' => [$taxFree['id']]])[0]['taxStatus'] ?? null;
-    check($taxStatus === 'tax-free', 'Shopware recorded the order as tax free (got ' . json_encode($taxStatus) . ')');
-    transition($taxFree['id'], 'paid');
-    check(beliqDocuments($taxFree['id']) === [], 'no beliq document for the order');
-    $failure = (string) (orderCustomFields($taxFree['id'])[FAILURE_FIELD] ?? '');
-    // The field keeps 255 characters, so the end of the message shows it fits.
-    check(str_contains($failure, 'as tax free') && str_ends_with($failure, 'no e-invoice for the order.'), 'the failure on the order says the order is tax free, in full (' . $failure . ')');
-    if ($stub) {
-        check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call');
-    }
+    withCompanyTax($shop['countries']['AT'], 'AT', static function () use ($shop, $product19, $austrianCompany, $stub, $baseUrl): void {
+        $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+        $taxFree = placeOrder($shop, $product19, 1, $austrianCompany);
+        $taxStatus = search('order', ['ids' => [$taxFree['id']]])[0]['taxStatus'] ?? null;
+        check($taxStatus === 'tax-free', 'Shopware recorded the order as tax free (got ' . json_encode($taxStatus) . ')');
+        transition($taxFree['id'], 'paid');
+        check(beliqDocuments($taxFree['id']) === [], 'no beliq document for the order');
+        $failure = (string) (orderCustomFields($taxFree['id'])[FAILURE_FIELD] ?? '');
+        // The field keeps 255 characters, so the end of the message shows it fits.
+        check(
+            str_contains($failure, 'as tax free') && str_contains($failure, '"Tax-free orders to businesses in other EU countries"')
+                && str_ends_with($failure, 'generate the invoice again.'),
+            'the failure on the order names the setting, in full (' . $failure . ')',
+        );
+        if ($stub) {
+            check(stubGenerateCount($baseUrl) === $generatesBefore, 'the stub saw no generate call');
+        }
+    });
 } catch (Throwable $e) {
     check(false, 'the tax-free case raised ' . $e->getMessage());
-} finally {
-    if ($austria !== null) {
-        try {
-            admin('PATCH', '/country/' . $austria, ['companyTax' => ['enabled' => false, 'currencyId' => CURRENCY_EUR, 'amount' => 0]]);
-        } catch (Throwable $e) {
-            check(false, 'restoring Austria\'s company tax setting raised ' . $e->getMessage());
-        }
-    }
+}
+
+echo "\n== Case: a tax-free order to an Austrian company, reverse charge stated ==\n";
+try {
+    configure(array_merge($base, $cases['German XRechnung (xml)']['config'], [
+        'taxFreeEuBusiness' => 'AE',
+        'reverseChargeReasonCode' => 'VATEX-EU-AE',
+        'reverseChargeReasonText' => 'Reverse charge',
+    ]));
+    withCompanyTax($shop['countries']['AT'], 'AT', static function () use ($shop, $product19, $austrianCompany, $stub, $baseUrl, $client): void {
+        checkTaxFreeInvoice(placeOrder($shop, $product19, 2, $austrianCompany), $stub, $baseUrl, $client, static function (array $invoice): void {
+            [$lines, $summary] = sentCategories($invoice);
+            check($lines !== [] && array_unique($lines, SORT_REGULAR) === [['AE', 0.0]], 'every line of the request is AE at 0% (' . json_encode($lines) . ')');
+            check($summary === [['AE', 'VATEX-EU-AE', 'Reverse charge']], 'the request has one AE breakdown with the configured reason (' . json_encode($summary) . ')');
+            check(($invoice['buyer']['vatId'] ?? null) === 'ATU12345678', 'the request carries the buyer\'s VAT ID');
+        });
+    });
+} catch (Throwable $e) {
+    check(false, 'the reverse charge case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: a tax-free order to a Swiss company, not subject to VAT stated ==\n";
+// Switzerland is no EU member, so its company tax setting makes any company
+// buyer's order tax free, with or without a VAT ID.
+try {
+    configure(array_merge($base, $cases['German XRechnung (xml)']['config'], [
+        'sellerRegistrationId' => 'HRB 12345 B',
+        'taxFreeNonEu' => 'O',
+        'outOfScopeReasonCode' => 'VATEX-EU-O',
+        'outOfScopeReasonText' => 'Not subject to VAT',
+    ]));
+    admin('POST', '/_action/sync', ['smoke-channel-ch' => ['entity' => 'sales_channel_country', 'action' => 'upsert', 'payload' => [
+        ['salesChannelId' => $channel['id'], 'countryId' => $shop['countries']['CH']],
+    ]]]);
+    withCompanyTax($shop['countries']['CH'], 'CH', static function () use ($shop, $product19, $stub, $baseUrl, $client): void {
+        $swiss = ['country' => 'CH', 'city' => 'Zuerich', 'zipcode' => '8001', 'company' => 'Kunde AG', 'vatId' => 'CHE123456789'];
+        checkTaxFreeInvoice(placeOrder($shop, $product19, 2, $swiss), $stub, $baseUrl, $client, static function (array $invoice): void {
+            [$lines, $summary] = sentCategories($invoice);
+            check($lines !== [] && array_unique($lines, SORT_REGULAR) === [['O', 0.0]], 'every line of the request is O (' . json_encode($lines) . ')');
+            check($summary === [['O', 'VATEX-EU-O', 'Not subject to VAT']], 'the request has one O breakdown with the configured reason (' . json_encode($summary) . ')');
+            check(
+                !isset($invoice['seller']['vatId']) && !isset($invoice['buyer']['vatId'])
+                    && ($invoice['seller']['registrationId'] ?? null) === 'HRB 12345 B',
+                'the request carries no VAT ID and the seller\'s registration number (BR-O-02, BR-CO-26)',
+            );
+        });
+    });
+} catch (Throwable $e) {
+    check(false, 'the not subject to VAT case raised ' . $e->getMessage());
 }
 
 echo "\n== Case: a second paid transition keeps the document, a manual one adds -2 ==\n";

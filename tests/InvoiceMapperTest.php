@@ -166,16 +166,85 @@ final class InvoiceMapperTest extends TestCase
 
     public function testACategoryWithNoSettingSaysSo(): void
     {
-        $order = $this->order([new SourceLine('Reverse charge', 1.0, 500.0, 500.0, 0.0, 'C62', 'AE')]);
+        $order = $this->order([new SourceLine('Intra-community supply', 1.0, 500.0, 500.0, 0.0, 'C62', 'K')]);
 
         try {
             $this->mapper->toGenerateBody($order, 'xrechnung');
             self::fail('no exception');
         } catch (MissingOrderDataException $e) {
-            self::assertStringContainsString('(BR-AE-10)', $e->getMessage());
-            self::assertStringContainsString('for categories E and G only', $e->getMessage());
-            self::assertStringNotContainsString('Set the exemption reason for category AE', $e->getMessage());
+            self::assertStringContainsString('(BR-IC-10)', $e->getMessage());
+            self::assertStringContainsString('The plugin settings hold no exemption reason for this category.', $e->getMessage());
+            self::assertStringNotContainsString('Set the exemption reason for category K', $e->getMessage());
         }
+    }
+
+    public function testReverseChargeAndOutOfScopeReasonsAreSettings(): void
+    {
+        foreach (['AE' => 'BR-AE-10', 'O' => 'BR-O-10'] as $category => $rule) {
+            $order = $this->order(
+                [new SourceLine('Tax-free line', 1.0, 500.0, 500.0, 0.0, 'C62', $category)],
+                ['sellerRegistrationId' => 'HRB 12345'],
+            );
+            try {
+                $this->mapper->toGenerateBody($order, 'xrechnung');
+                self::fail('no exception for ' . $category);
+            } catch (MissingOrderDataException $e) {
+                self::assertStringContainsString('(' . $rule . ')', $e->getMessage());
+                self::assertStringContainsString('Set the exemption reason for category ' . $category . ' in the plugin settings', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * BR-O-02: an invoice with a line not subject to VAT carries no seller or
+     * buyer VAT ID. BR-CO-26 then leaves the registration number to name the
+     * seller.
+     */
+    public function testAnOutOfScopeInvoiceCarriesNoVatId(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Consulting', 1.0, 500.0, 500.0, 0.0, 'C62', 'O')],
+            [
+                'buyerVatId' => 'CHE123456789',
+                'sellerRegistrationId' => 'HRB 12345',
+                'exemptionReasons' => ['O' => new ExemptionReason('VATEX-EU-O', 'Not subject to VAT')],
+            ],
+        );
+
+        $invoice = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice'];
+
+        self::assertArrayNotHasKey('vatId', $invoice['seller']);
+        self::assertArrayNotHasKey('vatId', $invoice['buyer']);
+        self::assertSame('HRB 12345', $invoice['seller']['registrationId']);
+        self::assertSame('O', $invoice['lines'][0]['vatCategoryCode']);
+        self::assertSame('O', $invoice['taxSummary'][0]['vatCategoryCode']);
+        self::assertSame('VATEX-EU-O', $invoice['taxSummary'][0]['exemptionReasonCode']);
+        self::assertSame(0.0, $invoice['totalTaxAmount']);
+    }
+
+    public function testAnInvoiceInAnotherCategoryKeepsTheVatIds(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Service', 1.0, 500.0, 500.0, 0.0, 'C62', 'AE')],
+            ['buyerVatId' => 'ATU12345678', 'exemptionReasons' => ['AE' => new ExemptionReason('VATEX-EU-AE')]],
+        );
+
+        $invoice = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice'];
+
+        self::assertSame('DE123456789', $invoice['seller']['vatId']);
+        self::assertSame('ATU12345678', $invoice['buyer']['vatId']);
+    }
+
+    public function testAnOutOfScopeInvoiceWithoutARegistrationNumberStops(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Consulting', 1.0, 500.0, 500.0, 0.0, 'C62', 'O')],
+            ['exemptionReasons' => ['O' => new ExemptionReason('VATEX-EU-O')]],
+        );
+
+        $this->expectException(MissingOrderDataException::class);
+        $this->expectExceptionMessage('Order INV-2026-001 is in VAT category O, so the invoice carries no VAT ID (BR-O-02) and names the seller by its registration number (BT-30, BR-CO-26).');
+        $this->mapper->toGenerateBody($order, 'xrechnung');
     }
 
     public function testAnEmptyReasonCountsAsMissing(): void
@@ -317,7 +386,12 @@ final class InvoiceMapperTest extends TestCase
      */
     private function order(array $lines, array $overrides = []): SourceOrder
     {
-        $seller = new Party('Seller GmbH', new Address('Berlin', '10115', 'DE', 'Hauptstrasse 1'), 'DE123456789');
+        $seller = new Party(
+            'Seller GmbH',
+            new Address('Berlin', '10115', 'DE', 'Hauptstrasse 1'),
+            'DE123456789',
+            registrationId: $overrides['sellerRegistrationId'] ?? null,
+        );
         $buyer = new Party(
             'Buyer SARL',
             new Address('Paris', '75002', 'FR', 'Rue de la Paix 2'),

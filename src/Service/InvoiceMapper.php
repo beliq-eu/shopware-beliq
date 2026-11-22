@@ -23,10 +23,15 @@ use Beliq\Shopware\Invoice\SourceOrder;
  * A VAT breakdown in a category that needs an exemption reason carries the
  * merchant's reason for that category. Standard rated (BR-S-10) and zero rated
  * (BR-Z-10) breakdowns must not carry one, so they never get it.
+ *
+ * An invoice with a line not subject to VAT (category O) carries no VAT ID of
+ * the seller or the buyer (BR-O-02), so the seller is named by its legal
+ * registration number (BT-30) alone (BR-CO-26).
  */
 final class InvoiceMapper
 {
     private const DEFAULT_STANDARD_CATEGORY = 'S';
+    private const OUT_OF_SCOPE_CATEGORY = 'O';
 
     /**
      * The categories whose VAT breakdown needs an exemption reason code (BT-121)
@@ -41,7 +46,7 @@ final class InvoiceMapper
     ];
 
     /** The categories PluginConfigProvider reads a reason for. */
-    private const CONFIGURABLE_REASONS = ['E', 'G'];
+    private const CONFIGURABLE_REASONS = ['AE', 'E', 'G', 'O'];
 
     /**
      * @return array<string, mixed> the JSON body for POST /v1/generate
@@ -71,6 +76,15 @@ final class InvoiceMapper
             ];
         }
 
+        $seller = $order->seller->toArray();
+        $buyer = $order->buyer->toArray();
+        if (in_array(self::OUT_OF_SCOPE_CATEGORY, array_column($lines, 'vatCategoryCode'), true)) {
+            unset($seller['vatId'], $buyer['vatId']);
+            if (!isset($seller['registrationId'])) {
+                throw MissingOrderDataException::outOfScopeSellerId($order->number);
+            }
+        }
+
         $taxSummary = $this->buildTaxSummary($order->lines, $order);
 
         $totalNet = $this->round2(array_sum(array_column($taxSummary, 'taxableAmount')));
@@ -81,8 +95,8 @@ final class InvoiceMapper
             'number' => $order->number,
             'issueDate' => $order->issueDate,
             'currencyCode' => $order->currencyCode,
-            'seller' => $order->seller->toArray(),
-            'buyer' => $order->buyer->toArray(),
+            'seller' => $seller,
+            'buyer' => $buyer,
             'lines' => $lines,
             'taxSummary' => $taxSummary,
             'totalNetAmount' => $totalNet,

@@ -28,13 +28,24 @@ final class PluginConfigProvider
 
     /**
      * The settings that hold the exemption reason (BT-121 code, BT-120 text) of
-     * each VAT category the zero-rate setting offers that needs one: E (BR-E-10)
-     * and G (BR-G-10). Z must not carry one (BR-Z-10).
+     * each VAT category the plugin offers that needs one: E (BR-E-10) and G
+     * (BR-G-10) from the zero-rate setting, AE (BR-AE-10) and O (BR-O-10) from
+     * the tax-free settings, where G is offered too. Z must not carry one
+     * (BR-Z-10).
      */
     private const EXEMPTION_REASON_KEYS = [
+        'AE' => ['reverseChargeReasonCode', 'reverseChargeReasonText'],
         'E' => ['exemptReasonCode', 'exemptReasonText'],
         'G' => ['exportReasonCode', 'exportReasonText'],
+        'O' => ['outOfScopeReasonCode', 'outOfScopeReasonText'],
     ];
+
+    /**
+     * The categories each tax-free setting offers. Its other option, and any
+     * value not listed, means no invoice for such an order.
+     */
+    private const TAX_FREE_EU_BUSINESS_CATEGORIES = ['AE'];
+    private const TAX_FREE_NON_EU_CATEGORIES = ['G', 'O'];
 
     /** UNTDID 4461 credit-transfer payment means. 58 is SEPA credit transfer. */
     private const PAYMENT_MEANS_CODES = ['58', '30'];
@@ -54,6 +65,9 @@ final class PluginConfigProvider
             'sellerStreet', 'sellerPostalCode', 'sellerCity', 'sellerCountryCode',
             'paymentMeansCode', 'sellerIban', 'sellerBic', 'sellerBankName',
             'exemptReasonCode', 'exemptReasonText', 'exportReasonCode', 'exportReasonText',
+            'taxFreeEuBusiness', 'taxFreeNonEu',
+            'reverseChargeReasonCode', 'reverseChargeReasonText',
+            'outOfScopeReasonCode', 'outOfScopeReasonText',
         ];
 
         $values = [];
@@ -138,6 +152,9 @@ final class PluginConfigProvider
             }
         }
 
+        $taxFreeEuBusiness = $str('taxFreeEuBusiness');
+        $taxFreeNonEu = $str('taxFreeNonEu');
+
         return new PluginConfig(
             enabled: $bool('enabled', false),
             apiKey: $str('apiKey'),
@@ -151,6 +168,8 @@ final class PluginConfigProvider
             seller: $seller,
             paymentMeans: $paymentMeans,
             exemptionReasons: $exemptionReasons,
+            taxFreeEuBusinessCategory: in_array($taxFreeEuBusiness, self::TAX_FREE_EU_BUSINESS_CATEGORIES, true) ? $taxFreeEuBusiness : null,
+            taxFreeNonEuCategory: in_array($taxFreeNonEu, self::TAX_FREE_NON_EU_CATEGORIES, true) ? $taxFreeNonEu : null,
         );
     }
 }

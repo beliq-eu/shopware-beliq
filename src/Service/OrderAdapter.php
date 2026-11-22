@@ -16,6 +16,7 @@ use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderCustomer\OrderCustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\System\Country\CountryEntity;
 
 /**
  * Extracts a normalized SourceOrder from a Shopware OrderEntity. This is the
@@ -30,10 +31,11 @@ use Shopware\Core\Checkout\Order\OrderEntity;
  *
  * Line figures are converted to the net basis EN 16931 works in: Shopware reports
  * order figures in the order's tax status, so a gross order has its per-line tax
- * subtracted back out. An order Shopware marks tax free gets no invoice: Shopware
- * records that no VAT was charged, not why, and the VAT category depends on why.
- * The seller comes from plugin config, the buyer from the order's billing address
- * and customer.
+ * subtracted back out. An order Shopware marks tax free puts every line at 0% in
+ * the VAT category the merchant stated for where the order ships; Shopware records
+ * that no VAT was charged, not why, and the category depends on why. The seller
+ * comes from plugin config, the buyer from the order's billing address and
+ * customer.
  */
 final class OrderAdapter
 {
@@ -43,12 +45,16 @@ final class OrderAdapter
      */
     private const BUYER_REFERENCE_FIELD = 'beliq_buyer_reference';
 
+    /** The labels of the tax-free settings in config.xml, named in a failure. */
+    private const TAX_FREE_EU_BUSINESS_SETTING = 'Tax-free orders to businesses in other EU countries';
+    private const TAX_FREE_NON_EU_SETTING = 'Tax-free orders outside the EU';
+
     public function toSourceOrder(OrderEntity $order, PluginConfig $config): SourceOrder
     {
         $taxStatus = $order->getTaxStatus() ?? $order->getPrice()->getTaxStatus();
-        if ($taxStatus === CartPrice::TAX_STATE_FREE) {
-            throw MissingOrderDataException::taxFreeOrder($order->getOrderNumber() ?? $order->getId());
-        }
+        $taxFreeCategory = $taxStatus === CartPrice::TAX_STATE_FREE
+            ? $this->taxFreeCategory($order, $config)
+            : null;
 
         $lines = [];
         foreach ($order->getLineItems() ?? [] as $item) {
@@ -57,9 +63,9 @@ final class OrderAdapter
             if ($item->getType() === LineItem::CONTAINER_LINE_ITEM) {
                 continue;
             }
-            $lines[] = $this->toSourceLine($item, $taxStatus);
+            $lines[] = $this->toSourceLine($item, $taxStatus, $taxFreeCategory);
         }
-        foreach ($this->shippingLines($order, $taxStatus) as $line) {
+        foreach ($this->shippingLines($order, $taxStatus, $taxFreeCategory) as $line) {
             $lines[] = $line;
         }
 
@@ -88,8 +94,7 @@ final class OrderAdapter
             $billing?->getCompany(),
             $customer?->getCompany(),
         ]);
-        $vatIds = $customer?->getVatIds() ?? [];
-        $vatId = $this->firstNonEmpty($vatIds);
+        $vatId = $this->buyerVatId($order);
 
         $accountType = $customer?->getCustomer()?->getAccountType();
         $flaggedBusiness = $accountType === CustomerEntity::ACCOUNT_TYPE_BUSINESS
@@ -113,6 +118,62 @@ final class OrderAdapter
     }
 
     /**
+     * The VAT category the merchant stated for a tax-free order that ships where
+     * this one does. Shopware's tax detector makes an order tax free from its
+     * shipping country, so that country decides, by its own EU flag: another EU
+     * country than the seller's, with a buyer VAT ID, or a country outside the
+     * EU. The shop does not record the ground (goods or services, for one), so
+     * the category is the merchant's setting. Without one, and for any other
+     * tax-free order, there is no invoice.
+     */
+    private function taxFreeCategory(OrderEntity $order, PluginConfig $config): string
+    {
+        $label = $order->getOrderNumber() ?? $order->getId();
+
+        $country = $this->shippingCountry($order);
+        if ($country === null) {
+            throw MissingOrderDataException::taxFreeOrder($label, 'its deliveries name no one shipping country');
+        }
+
+        if (!$country->getIsEu()) {
+            return $config->taxFreeNonEuCategory
+                ?? throw MissingOrderDataException::taxFreeCategoryNotSet($label, 'outside the EU', self::TAX_FREE_NON_EU_SETTING);
+        }
+        if (strtoupper($country->getIso() ?? '') === $config->seller->address->countryCode) {
+            throw MissingOrderDataException::taxFreeOrder($label, 'it ships within the seller\'s country');
+        }
+        if ($this->buyerVatId($order) === null) {
+            throw MissingOrderDataException::taxFreeOrder($label, 'it ships to another EU country to a buyer with no VAT ID');
+        }
+
+        return $config->taxFreeEuBusinessCategory
+            ?? throw MissingOrderDataException::taxFreeCategoryNotSet($label, 'to a business in another EU country', self::TAX_FREE_EU_BUSINESS_SETTING);
+    }
+
+    /**
+     * The one country the order's deliveries ship to; null when a delivery has
+     * no shipping address with a country, or they ship to several.
+     */
+    private function shippingCountry(OrderEntity $order): ?CountryEntity
+    {
+        $found = null;
+        foreach ($order->getDeliveries() ?? [] as $delivery) {
+            $country = $delivery->getShippingOrderAddress()?->getCountry();
+            if ($country === null || ($found !== null && $found->getId() !== $country->getId())) {
+                return null;
+            }
+            $found = $country;
+        }
+
+        return $found;
+    }
+
+    private function buyerVatId(OrderEntity $order): ?string
+    {
+        return $this->firstNonEmpty($order->getOrderCustomer()?->getVatIds() ?? []);
+    }
+
+    /**
      * The buyer reference (BT-10). XRechnung requires it (BR-DE-15) and Peppol BIS
      * accepts it in place of an order reference. A merchant routing to a public
      * administration sets the buyer's Leitweg-ID in the order custom field; for a
@@ -131,7 +192,11 @@ final class OrderAdapter
         ]) ?? $orderNumber;
     }
 
-    private function toSourceLine(OrderLineItemEntity $item, string $taxStatus): SourceLine
+    /**
+     * @param string|null $taxFreeCategory the category of a tax-free order, whose
+     *     lines carry no VAT: their total is their net, at 0%
+     */
+    private function toSourceLine(OrderLineItemEntity $item, string $taxStatus, ?string $taxFreeCategory): SourceLine
     {
         $quantity = (float) $item->getQuantity();
         $price = $item->getPrice();
@@ -145,15 +210,21 @@ final class OrderAdapter
                 unitNetPrice: $quantity > 0.0 ? $total / $quantity : $total,
                 lineNetTotal: $total,
                 vatRate: 0.0,
+                vatCategoryCode: $taxFreeCategory,
                 itemId: $this->itemId($item),
             );
         }
 
         $total = $price->getTotalPrice();
         $taxes = $price->getCalculatedTaxes();
-        $rate = $this->dominantRate($taxes);
 
-        $net = $taxStatus === CartPrice::TAX_STATE_GROSS ? $total - $taxes->getAmount() : $total;
+        if ($taxFreeCategory !== null) {
+            $net = $total;
+            $rate = 0.0;
+        } else {
+            $net = $taxStatus === CartPrice::TAX_STATE_GROSS ? $total - $taxes->getAmount() : $total;
+            $rate = $this->dominantRate($taxes);
+        }
 
         return new SourceLine(
             description: $item->getLabel(),
@@ -161,6 +232,7 @@ final class OrderAdapter
             unitNetPrice: $quantity > 0.0 ? $net / $quantity : $net,
             lineNetTotal: $net,
             vatRate: $rate,
+            vatCategoryCode: $taxFreeCategory,
             itemId: $this->itemId($item),
         );
     }
@@ -169,11 +241,12 @@ final class OrderAdapter
      * One line per tax component of the order's shipping costs. A shipping method
      * on tax type `auto` spreads its tax across the cart's rates, one component per
      * rate, so labelling the whole charge with a single rate would file part of it
-     * in the wrong VAT group. Free shipping adds nothing.
+     * in the wrong VAT group. On a tax-free order the whole charge is one line at
+     * 0% in the order's category. Free shipping adds nothing.
      *
      * @return list<SourceLine>
      */
-    private function shippingLines(OrderEntity $order, string $taxStatus): array
+    private function shippingLines(OrderEntity $order, string $taxStatus, ?string $taxFreeCategory): array
     {
         $shipping = $order->getShippingCosts();
         $total = $shipping->getTotalPrice();
@@ -184,8 +257,8 @@ final class OrderAdapter
         $name = $this->shippingMethodName($order);
 
         $taxes = $shipping->getCalculatedTaxes();
-        if ($taxes->count() === 0) {
-            return [$this->shippingLine($name, $total, 0.0)];
+        if ($taxFreeCategory !== null || $taxes->count() === 0) {
+            return [$this->shippingLine($name, $total, 0.0, $taxFreeCategory)];
         }
 
         $lines = [];
@@ -235,7 +308,7 @@ final class OrderAdapter
         return (string) array_key_first($names);
     }
 
-    private function shippingLine(string $name, float $net, float $rate): SourceLine
+    private function shippingLine(string $name, float $net, float $rate, ?string $category = null): SourceLine
     {
         return new SourceLine(
             description: $name,
@@ -243,6 +316,7 @@ final class OrderAdapter
             unitNetPrice: $net,
             lineNetTotal: $net,
             vatRate: $rate,
+            vatCategoryCode: $category,
         );
     }
 

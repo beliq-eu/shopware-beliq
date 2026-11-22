@@ -14,6 +14,11 @@ use Beliq\Shopware\Invoice\SourceOrder;
  * template. profile is null when the merchant leaves it blank, letting the engine
  * pick its default. exemptionReasons holds the configured VAT exemption reason
  * per VAT category code, only for categories the merchant gave one.
+ *
+ * taxFreeEuBusinessCategory and taxFreeNonEuCategory are the VAT categories the
+ * merchant states for an order Shopware marks tax free, by where it ships: to a
+ * business in another EU country, or outside the EU. null means the merchant
+ * stated none, and such an order gets no invoice.
  */
 final readonly class PluginConfig
 {
@@ -52,6 +57,8 @@ final readonly class PluginConfig
         public Party $seller,
         public ?PaymentMeans $paymentMeans = null,
         public array $exemptionReasons = [],
+        public ?string $taxFreeEuBusinessCategory = null,
+        public ?string $taxFreeNonEuCategory = null,
     ) {
     }
 

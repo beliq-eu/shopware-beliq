@@ -355,8 +355,8 @@ final class BeliqInvoiceRendererTest extends TestCase
     }
 
     /**
-     * Shopware records that no VAT was charged, not why, so a tax-free order
-     * gets no invoice and beliq is not called.
+     * Shopware records that no VAT was charged, not why, so a tax-free order the
+     * settings state no category for gets no invoice and beliq is not called.
      */
     public function testATaxFreeOrderIsARenderErrorWithoutCallingTheApi(): void
     {

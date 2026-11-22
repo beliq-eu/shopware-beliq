@@ -109,6 +109,51 @@ final class PluginConfigTest extends TestCase
         self::assertSame([], PluginConfigProvider::fromValues([])->exemptionReasons);
     }
 
+    public function testReverseChargeAndOutOfScopeReasonsAreMapped(): void
+    {
+        $config = PluginConfigProvider::fromValues([
+            'reverseChargeReasonCode' => 'VATEX-EU-AE',
+            'outOfScopeReasonText' => ' Not subject to VAT ',
+        ]);
+
+        self::assertEquals([
+            'AE' => new ExemptionReason('VATEX-EU-AE', null),
+            'O' => new ExemptionReason(null, 'Not subject to VAT'),
+        ], $config->exemptionReasons);
+    }
+
+    public function testTaxFreeCategoriesDefaultToNone(): void
+    {
+        $config = PluginConfigProvider::fromValues([]);
+
+        self::assertNull($config->taxFreeEuBusinessCategory);
+        self::assertNull($config->taxFreeNonEuCategory);
+    }
+
+    public function testTaxFreeCategoriesAreMapped(): void
+    {
+        $config = PluginConfigProvider::fromValues(['taxFreeEuBusiness' => 'AE', 'taxFreeNonEu' => 'O']);
+
+        self::assertSame('AE', $config->taxFreeEuBusinessCategory);
+        self::assertSame('O', $config->taxFreeNonEuCategory);
+        self::assertSame('G', PluginConfigProvider::fromValues(['taxFreeNonEu' => 'G'])->taxFreeNonEuCategory);
+    }
+
+    /**
+     * Each setting offers its own categories. "stop", and a category the
+     * setting does not offer (K, or one meant for the other setting), state
+     * none.
+     */
+    public function testATaxFreeCategoryTheSettingDoesNotOfferStatesNone(): void
+    {
+        foreach (['stop', 'K', 'G', 'O', 'Z'] as $value) {
+            self::assertNull(PluginConfigProvider::fromValues(['taxFreeEuBusiness' => $value])->taxFreeEuBusinessCategory, $value);
+        }
+        foreach (['stop', 'K', 'AE', 'E', 'Z'] as $value) {
+            self::assertNull(PluginConfigProvider::fromValues(['taxFreeNonEu' => $value])->taxFreeNonEuCategory, $value);
+        }
+    }
+
     public function testGetReadsExactlyTheSettingsTheAdminOffers(): void
     {
         $xml = simplexml_load_file(__DIR__ . '/../src/Resources/config/config.xml');

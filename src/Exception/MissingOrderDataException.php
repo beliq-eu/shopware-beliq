@@ -28,12 +28,39 @@ final class MissingOrderDataException extends \RuntimeException
     /**
      * Shopware's tax detector marks an order tax free from the shipping country's
      * settings (tax free for every customer, or for companies), not from a VAT
-     * ground, so the order does not say which category applies.
+     * ground. The merchant states a category only for an order that ships to a
+     * business in another EU country or outside the EU; any other tax-free order
+     * does not say which category applies.
+     *
+     * @param string $cause why the order is none of those two, as a clause
      */
-    public static function taxFreeOrder(string $order): self
+    public static function taxFreeOrder(string $order, string $cause): self
     {
         return new self(sprintf(
-            'Shopware marked order %s as tax free, and the plugin cannot tell which VAT category applies (for example intra-community supply K, export G or reverse charge AE), so it generates no e-invoice for the order.',
+            'Shopware marked order %s as tax free, and %s, so the plugin cannot tell which VAT category applies and generates no e-invoice for the order.',
+            $order,
+            $cause,
+        ));
+    }
+
+    /**
+     * @param string $destination where the order ships, as a phrase after "ships"
+     * @param string $setting the label of the setting that states the category
+     */
+    public static function taxFreeCategoryNotSet(string $order, string $destination, string $setting): self
+    {
+        return new self(sprintf(
+            'Shopware marked order %s as tax free, and it ships %s. Choose the VAT category for such orders in "%s", then generate the invoice again.',
+            $order,
+            $destination,
+            $setting,
+        ));
+    }
+
+    public static function outOfScopeSellerId(string $order): self
+    {
+        return new self(sprintf(
+            'Order %s is in VAT category O, so the invoice carries no VAT ID (BR-O-02) and names the seller by its registration number (BT-30, BR-CO-26). Set it in the plugin settings, then generate the invoice again.',
             $order,
         ));
     }
@@ -50,7 +77,7 @@ final class MissingOrderDataException extends \RuntimeException
             $rule,
             $configurable
                 ? sprintf('Set the exemption reason for category %s in the plugin settings, then generate the invoice again.', $category)
-                : 'The plugin settings hold an exemption reason for categories E and G only.',
+                : 'The plugin settings hold no exemption reason for this category.',
         ));
     }
 
