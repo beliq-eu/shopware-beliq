@@ -166,9 +166,13 @@ XML or a hybrid PDF, depending on the format you chose.
 The first beliq document on an order takes the order number. Creating the
 document again from the Documents tab adds one numbered `<order number>-<n>`,
 with n one more than the highest such number held by a beliq document of any
-order. That document is a new invoice, not a copy: its invoice number (BT-1)
-is its document number, and it shows the order as it is when you create it.
-With a bank account set, the payment reference stays the order number. After
+order, compared without regard to case. That document is a new invoice, not a
+copy: its invoice number (BT-1) is its document number, and its lines show
+the order as it is when you create it. Its issue date (BT-2) stays the order
+date, as for the first document, and it does not refer to the earlier
+invoice, so the buyer then holds two invoices for one order. Cancel the
+earlier one yourself if the new one replaces it. With a bank account set, the
+payment reference stays the order number. After
 you delete every beliq document of an order, the next one takes the order
 number again, which the buyer may already hold as an invoice number. The
 Preview button of that dialog shows a short notice instead of the document:

@@ -46,7 +46,8 @@ final class InvoiceDocumentLookup
      * The numbers are read from the beliq documents of every order, because
      * Shopware's duplicate check spans them all: with dashes in the order number
      * range, another order's own number can have this order's suffix form (order
-     * `A-1-2` next to order `A-1`).
+     * `A-1-2` next to order `A-1`). The numbers compare without regard to case,
+     * as that check does under MySQL's default collation.
      */
     public function nextNumber(string $orderNumber, Context $context): string
     {
@@ -57,15 +58,13 @@ final class InvoiceDocumentLookup
             new PrefixFilter('documentNumber', $orderNumber . '-'),
         ]));
 
-        $suffix = '/^' . preg_quote($orderNumber, '/') . '-([1-9][0-9]*)$/D';
+        $form = '/^' . preg_quote($orderNumber, '/') . '(?:-([1-9][0-9]*))?$/iuD';
         $documents = $this->documentRepository->search($criteria, $context)->getEntities();
         $highest = 0;
         foreach ($documents as $document) {
             $number = $document->getDocumentNumber();
-            if ($number === $orderNumber) {
-                $highest = max($highest, 1);
-            } elseif ($number !== null && preg_match($suffix, $number, $match) === 1) {
-                $highest = max($highest, (int) $match[1]);
+            if ($number !== null && preg_match($form, $number, $match) === 1) {
+                $highest = max($highest, isset($match[1]) ? (int) $match[1] : 1);
             }
         }
 

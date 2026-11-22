@@ -259,10 +259,13 @@ function checkInvoiceNumber(array $document, string $number, bool $stub, string 
         return;
     }
     $download = http('GET', SHOP . '/api/_action/document/' . $document['id'] . '/' . $document['deepLinkCode'] . '?fileType=xml', ['Authorization: Bearer ' . adminToken()]);
-    check(
-        $download['status'] === 200 && str_contains($download['body'], '>' . htmlspecialchars($number, ENT_XML1) . '</'),
-        'the stored document carries ' . $number . ' as its invoice number',
-    );
+    $xml = new DOMDocument();
+    $id = null;
+    if ($download['status'] === 200 && $xml->loadXML($download['body'], LIBXML_NONET)) {
+        // BT-1: rsm:ExchangedDocument/ram:ID in CII, the root's cbc:ID in UBL.
+        $id = (new DOMXPath($xml))->evaluate("string(/*[local-name()='CrossIndustryInvoice']/*[local-name()='ExchangedDocument']/*[local-name()='ID'] | /*[local-name()='Invoice']/*[local-name()='ID'])");
+    }
+    check($id === $number, 'the stored document carries ' . $number . ' as its invoice number (got ' . json_encode($id) . ')');
 }
 
 function orderCustomFields(string $orderId): array

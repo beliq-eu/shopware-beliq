@@ -6,8 +6,10 @@
   number (BT-1) is now its document number, `<order number>-<n>`. Up to 0.2.9
   every beliq document of an order carried the order number as its invoice
   number, so two documents with different content could carry one invoice
-  number. The first document still carries the order number. The payment
-  reference stays the order number.
+  number. The first document still carries the order number, and so does the
+  next one after every beliq document of the order is deleted. The issue date
+  and the payment reference stay as they were: the order date and the order
+  number.
 - The number of a new beliq document also skips the numbers of other orders'
   beliq documents. With dashes in the order numbers, another order's own
   number could have the regenerate form (order `A-1-2` next to order `A-1`),

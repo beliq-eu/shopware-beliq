@@ -72,6 +72,14 @@ final class InvoiceDocumentLookupTest extends TestCase
         self::assertSame('A-1-2-2', $this->nextNumber('A-1-2', [], ['A-1', 'A-1-2']));
     }
 
+    public function testNumbersCompareWithoutRegardToCase(): void
+    {
+        // Shopware's duplicate check runs under MySQL's case-insensitive collation,
+        // so sw-1-2 blocks SW-1-2.
+        self::assertSame('SW-1-3', $this->nextNumber('SW-1', ['SW-1'], ['sw-1-2']));
+        self::assertSame('SW-1-2', $this->nextNumber('SW-1', [], ['sw-1']));
+    }
+
     public function testOnlyBeliqDocumentsCount(): void
     {
         // Shopware's own invoice can hold the same number: the duplicate check is
@@ -120,8 +128,9 @@ final class InvoiceDocumentLookupTest extends TestCase
     }
 
     /**
-     * What the DAL's SQL does with the filters the lookup can send. A filter of
-     * another kind fails the test rather than matching everything.
+     * What the DAL's SQL does with the filters the lookup can send, under
+     * MySQL's case-insensitive default collation. A filter of another kind fails
+     * the test rather than matching everything.
      *
      * @param array<string, string> $fields
      */
@@ -133,10 +142,10 @@ final class InvoiceDocumentLookupTest extends TestCase
             return $filter->getOperator() === MultiFilter::CONNECTION_OR ? in_array(true, $results, true) : !in_array(false, $results, true);
         }
         if ($filter instanceof EqualsFilter) {
-            return ($fields[$filter->getField()] ?? null) === $filter->getValue();
+            return mb_strtolower($fields[$filter->getField()] ?? '') === mb_strtolower((string) $filter->getValue());
         }
         if ($filter instanceof PrefixFilter) {
-            return str_starts_with($fields[$filter->getField()] ?? '', $filter->getValue());
+            return str_starts_with(mb_strtolower($fields[$filter->getField()] ?? ''), mb_strtolower($filter->getValue()));
         }
         self::fail('the lookup sent a filter the test does not evaluate: ' . $filter::class);
     }
