@@ -35,7 +35,8 @@ final class InvoiceMapper
 
     /**
      * The categories whose VAT breakdown needs an exemption reason code (BT-121)
-     * or text (BT-120), each with the EN 16931 rule that requires it.
+     * or text (BT-120), each with the EN 16931 rule that requires it. The plugin
+     * settings hold a reason for each (PluginConfigProvider).
      */
     private const REASON_REQUIRED = [
         'AE' => 'BR-AE-10',
@@ -44,9 +45,6 @@ final class InvoiceMapper
         'K' => 'BR-IC-10',
         'O' => 'BR-O-10',
     ];
-
-    /** The categories PluginConfigProvider reads a reason for. */
-    private const CONFIGURABLE_REASONS = ['AE', 'E', 'G', 'O'];
 
     /**
      * @return array<string, mixed> the JSON body for POST /v1/generate
@@ -115,6 +113,15 @@ final class InvoiceMapper
         }
         if ($order->note !== null && $order->note !== '') {
             $invoice['note'] = $order->note;
+        }
+        $delivery = array_filter([
+            'date' => $order->deliveryDate,
+            'address' => $order->deliverToCountryCode !== null && $order->deliverToCountryCode !== ''
+                ? ['countryCode' => $order->deliverToCountryCode]
+                : null,
+        ], static fn ($value) => $value !== null && $value !== '');
+        if ($delivery !== []) {
+            $invoice['delivery'] = $delivery;
         }
         if ($order->paymentMeans !== null) {
             $invoice['paymentMeans'] = $order->paymentMeans->toArray();
@@ -205,12 +212,7 @@ final class InvoiceMapper
 
         $reason = ($order->exemptionReasons[$category] ?? null)?->toArray() ?? [];
         if ($reason === []) {
-            throw MissingOrderDataException::exemptionReason(
-                $order->number,
-                $category,
-                $rule,
-                in_array($category, self::CONFIGURABLE_REASONS, true),
-            );
+            throw MissingOrderDataException::exemptionReason($order->number, $category, $rule);
         }
 
         return $reason;

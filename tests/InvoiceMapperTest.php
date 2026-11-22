@@ -164,23 +164,9 @@ final class InvoiceMapperTest extends TestCase
         $this->mapper->toGenerateBody($order, 'xrechnung');
     }
 
-    public function testACategoryWithNoSettingSaysSo(): void
+    public function testTaxFreeCategoryReasonsAreSettings(): void
     {
-        $order = $this->order([new SourceLine('Intra-community supply', 1.0, 500.0, 500.0, 0.0, 'C62', 'K')]);
-
-        try {
-            $this->mapper->toGenerateBody($order, 'xrechnung');
-            self::fail('no exception');
-        } catch (MissingOrderDataException $e) {
-            self::assertStringContainsString('(BR-IC-10)', $e->getMessage());
-            self::assertStringContainsString('The plugin settings hold no exemption reason for this category.', $e->getMessage());
-            self::assertStringNotContainsString('Set the exemption reason for category K', $e->getMessage());
-        }
-    }
-
-    public function testReverseChargeAndOutOfScopeReasonsAreSettings(): void
-    {
-        foreach (['AE' => 'BR-AE-10', 'O' => 'BR-O-10'] as $category => $rule) {
+        foreach (['AE' => 'BR-AE-10', 'K' => 'BR-IC-10', 'O' => 'BR-O-10'] as $category => $rule) {
             $order = $this->order(
                 [new SourceLine('Tax-free line', 1.0, 500.0, 500.0, 0.0, 'C62', $category)],
                 ['sellerRegistrationId' => 'HRB 12345'],
@@ -348,6 +334,36 @@ final class InvoiceMapperTest extends TestCase
         self::assertArrayNotHasKey('note', $invoice);
         self::assertArrayNotHasKey('paymentMeans', $invoice);
         self::assertArrayNotHasKey('paymentTerms', $invoice);
+        self::assertArrayNotHasKey('delivery', $invoice);
+    }
+
+    /** BR-IC-11 and BR-IC-12: the actual delivery date (BT-72) and the deliver-to country (BT-80). */
+    public function testTheDeliveryDateAndCountryAreSentAsTheDelivery(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Intra-community supply', 1.0, 500.0, 500.0, 0.0, 'C62', 'K')],
+            [
+                'buyerVatId' => 'FR12345678901',
+                'exemptionReasons' => ['K' => new ExemptionReason('VATEX-EU-IC', null)],
+                'deliveryDate' => '2026-01-14',
+                'deliverToCountryCode' => 'FR',
+            ],
+        );
+
+        $invoice = $this->mapper->toGenerateBody($order, 'xrechnung')['invoice'];
+
+        self::assertSame(['date' => '2026-01-14', 'address' => ['countryCode' => 'FR']], $invoice['delivery']);
+        self::assertSame('VATEX-EU-IC', $invoice['taxSummary'][0]['exemptionReasonCode']);
+    }
+
+    public function testAnEmptyDeliverToCountryIsNotSent(): void
+    {
+        $order = $this->order(
+            [new SourceLine('Item', 1.0, 100.0, 100.0, 19.0)],
+            ['deliveryDate' => '2026-01-14', 'deliverToCountryCode' => ''],
+        );
+
+        self::assertSame(['date' => '2026-01-14'], $this->mapper->toGenerateBody($order, 'xrechnung')['invoice']['delivery']);
     }
 
     public function testProfilePassedThroughWhenGiven(): void
@@ -414,6 +430,8 @@ final class InvoiceMapperTest extends TestCase
             buyerFlaggedBusiness: $overrides['buyerFlaggedBusiness'] ?? false,
             zeroRateCategory: $overrides['zeroRateCategory'] ?? 'Z',
             exemptionReasons: $overrides['exemptionReasons'] ?? [],
+            deliveryDate: $overrides['deliveryDate'] ?? null,
+            deliverToCountryCode: $overrides['deliverToCountryCode'] ?? null,
         );
     }
 }

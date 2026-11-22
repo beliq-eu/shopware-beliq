@@ -57,6 +57,28 @@ final class MissingOrderDataException extends \RuntimeException
         ));
     }
 
+    /**
+     * An invoice in category K needs the actual delivery date (BT-72) or an
+     * invoicing period (BR-IC-11). The plugin reads the date the delivery was
+     * set to shipped and maps no invoicing period, so without that date there
+     * is no invoice.
+     */
+    public static function intraCommunityNotShipped(string $order): self
+    {
+        return new self(sprintf(
+            'Order %s is in VAT category K, which needs the actual delivery date (BT-72, BR-IC-11), and a delivery of the order was never set to shipped. Set it to shipped, then generate the invoice again.',
+            $order,
+        ));
+    }
+
+    public static function intraCommunitySeveralShippedDates(string $order): self
+    {
+        return new self(sprintf(
+            'Order %s is in VAT category K, which needs one actual delivery date (BT-72, BR-IC-11), and its deliveries were set to shipped on more than one day, so the plugin cannot tell which date applies.',
+            $order,
+        ));
+    }
+
     public static function outOfScopeSellerId(string $order): self
     {
         return new self(sprintf(
@@ -65,19 +87,14 @@ final class MissingOrderDataException extends \RuntimeException
         ));
     }
 
-    /**
-     * @param bool $configurable whether the plugin settings hold a reason for this category
-     */
-    public static function exemptionReason(string $order, string $category, string $rule, bool $configurable): self
+    public static function exemptionReason(string $order, string $category, string $rule): self
     {
         return new self(sprintf(
-            'Order %s has lines in VAT category %s, which needs a VAT exemption reason code (BT-121) or text (BT-120) (%s). %s',
+            'Order %s has lines in VAT category %s, which needs a VAT exemption reason code (BT-121) or text (BT-120) (%s). Set the exemption reason for category %s in the plugin settings, then generate the invoice again.',
             $order,
             $category,
             $rule,
-            $configurable
-                ? sprintf('Set the exemption reason for category %s in the plugin settings, then generate the invoice again.', $category)
-                : 'The plugin settings hold no exemption reason for this category.',
+            $category,
         ));
     }
 

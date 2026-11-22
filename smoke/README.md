@@ -29,6 +29,12 @@ configured reason, and the others carry none. More cases:
 - the same Austrian order, with reverse charge (`AE`) and its reason set, gets
   one document that validates; a stub run checks that every line is `AE` at 0%
   with one `AE` breakdown carrying the reason;
+- the same Austrian order, with intra-community supply (`K`) and its reason
+  set, gets no document when it is paid before it ships, and a failure on the
+  order names the actual delivery date (BT-72, BR-IC-11); once its delivery is
+  set to shipped, a document created by hand validates, and a stub run checks
+  that every line is `K` at 0% and that the request carries the shipping day
+  and `AT` as its delivery;
 - a tax-free order from a Swiss company buyer (under Switzerland's company tax
   setting, with Switzerland added to the sales channel), with not subject to
   VAT (`O`), its reason and the seller's registration number set, gets one

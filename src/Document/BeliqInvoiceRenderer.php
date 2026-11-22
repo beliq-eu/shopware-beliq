@@ -56,6 +56,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         private readonly OrderAdapter $adapter,
         private readonly InvoiceMapper $mapper,
         private readonly InvoiceDocumentLookup $documents,
+        private readonly DeliveryShippedDates $shippedDates,
         private readonly HttpClient $http = new CurlHttpClient(),
     ) {
     }
@@ -97,7 +98,11 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     continue;
                 }
 
-                $source = $this->adapter->toSourceOrder($order, $config);
+                $source = $this->adapter->toSourceOrder(
+                    $order,
+                    $config,
+                    fn (array $deliveryIds): array => $this->shippedDates->forDeliveries($deliveryIds, $context),
+                );
 
                 $body = $this->mapper->toGenerateBody(
                     $source,

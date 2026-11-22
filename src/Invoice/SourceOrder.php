@@ -13,6 +13,9 @@ namespace Beliq\Shopware\Invoice;
  *
  * exemptionReasons holds the merchant's VAT exemption reason per VAT category
  * code.
+ *
+ * deliveryDate is the actual delivery date (BT-72) and deliverToCountryCode the
+ * deliver-to country (BT-80), both null when the order does not send them.
  */
 final readonly class SourceOrder
 {
@@ -36,6 +39,8 @@ final readonly class SourceOrder
         public bool $buyerFlaggedBusiness = false,
         public string $zeroRateCategory = 'Z',
         public array $exemptionReasons = [],
+        public ?string $deliveryDate = null,
+        public ?string $deliverToCountryCode = null,
     ) {
     }
 

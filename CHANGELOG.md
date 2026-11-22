@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Intra-community supply (`K`) is offered for "Tax-free orders to businesses
+  in other EU countries", next to reverse charge (`AE`). Its invoice carries
+  the country of the order's shipping address as the deliver-to country
+  (BT-80, BR-IC-12), and as the actual delivery date (BT-72, BR-IC-11) the day
+  the order's delivery was set to shipped, read from Shopware's state history.
+  An order whose delivery was never set to shipped, or whose deliveries were
+  set to shipped on different days, gets no invoice, and the failure on the
+  order says why.
+- Two new settings hold the exemption reason for `K` (BR-IC-10). Without a
+  reason the order gets no invoice and no beliq call is made, as for the other
+  categories.
+- The help text of "Tax-free orders to businesses in other EU countries" says
+  how `K` works, in English and German.
+
 ## 0.2.8 (2026-11-22)
 
 - An order Shopware marks tax free can get an invoice again, in the VAT

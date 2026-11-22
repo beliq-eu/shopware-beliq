@@ -29,14 +29,15 @@ final class PluginConfigProvider
     /**
      * The settings that hold the exemption reason (BT-121 code, BT-120 text) of
      * each VAT category the plugin offers that needs one: E (BR-E-10) and G
-     * (BR-G-10) from the zero-rate setting, AE (BR-AE-10) and O (BR-O-10) from
-     * the tax-free settings, where G is offered too. Z must not carry one
-     * (BR-Z-10).
+     * (BR-G-10) from the zero-rate setting, AE (BR-AE-10), K (BR-IC-10) and O
+     * (BR-O-10) from the tax-free settings, where G is offered too. Z must not
+     * carry one (BR-Z-10).
      */
     private const EXEMPTION_REASON_KEYS = [
         'AE' => ['reverseChargeReasonCode', 'reverseChargeReasonText'],
         'E' => ['exemptReasonCode', 'exemptReasonText'],
         'G' => ['exportReasonCode', 'exportReasonText'],
+        'K' => ['intraCommunityReasonCode', 'intraCommunityReasonText'],
         'O' => ['outOfScopeReasonCode', 'outOfScopeReasonText'],
     ];
 
@@ -44,7 +45,7 @@ final class PluginConfigProvider
      * The categories each tax-free setting offers. Its other option, and any
      * value not listed, means no invoice for such an order.
      */
-    private const TAX_FREE_EU_BUSINESS_CATEGORIES = ['AE'];
+    private const TAX_FREE_EU_BUSINESS_CATEGORIES = ['AE', 'K'];
     private const TAX_FREE_NON_EU_CATEGORIES = ['G', 'O'];
 
     /** UNTDID 4461 credit-transfer payment means. 58 is SEPA credit transfer. */
@@ -67,6 +68,7 @@ final class PluginConfigProvider
             'exemptReasonCode', 'exemptReasonText', 'exportReasonCode', 'exportReasonText',
             'taxFreeEuBusiness', 'taxFreeNonEu',
             'reverseChargeReasonCode', 'reverseChargeReasonText',
+            'intraCommunityReasonCode', 'intraCommunityReasonText',
             'outOfScopeReasonCode', 'outOfScopeReasonText',
         ];
 
