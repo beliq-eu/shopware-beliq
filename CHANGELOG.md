@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The German help text of the setting for 0% lines reads more naturally. The
+  English text and what the setting does are unchanged.
+
 ## 0.2.7 (2026-11-22)
 
 - An order Shopware marks tax free gets no invoice. Shopware records that it
