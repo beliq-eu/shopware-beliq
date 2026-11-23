@@ -43,9 +43,9 @@ final class InvoiceDocumentLookup
      * merchant deletes an earlier document. A number in neither form is never
      * handed out, so it does not count.
      *
-     * `$issued` holds the numbers recorded for the order (IssuedInvoiceNumbers).
-     * They count as documents do, so a number stays used after its document is
-     * deleted: the buyer may hold that invoice.
+     * `$issued` holds the issued numbers in these forms, of any order
+     * (IssuedInvoiceNumbers). They count as documents do, so a number stays used
+     * after its document is deleted: the buyer may hold that invoice.
      *
      * The numbers are read from the beliq documents of every order, because
      * Shopware's duplicate check spans them all: with dashes in the order number

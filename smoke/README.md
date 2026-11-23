@@ -50,11 +50,12 @@ configured reason, and the others carry none. More cases:
   document, and a create by hand on the first order succeeds as `<order>-6`,
   with that invoice number;
 - after every beliq document of a new order is deleted, a create by hand
-  succeeds as `<order>-2`, with that invoice number, and the order's
-  `beliq_invoice_issued_numbers` custom field holds both numbers;
+  succeeds as `<order>-2`, with that invoice number; once `<order>-2` is
+  deleted too, another order renumbered `<order>-2` takes `<order>-2-2`;
 - two creates by hand at once on a new order both succeed, as `<order>-2`
-  and `<order>-3`; a stub run delays each generate answer by 2 s, so the two
-  creates overlap;
+  and `<order>-3`. Only a stub run makes the two overlap for sure: it delays
+  each generate answer by 2 s. Against the API the case passes without the
+  lock whenever the second create starts after the first is stored;
 - the admin's Preview returns the plugin's local notice, stores nothing and,
   in a stub run, makes no generate call.
 

@@ -25,7 +25,7 @@
         </service>
 
         <service id="Beliq\Shopware\Document\IssuedInvoiceNumbers">
-            <argument type="service" id="order.repository"/>
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
         </service>
 
         <service id="Beliq\Shopware\Document\BeliqInvoiceRenderer">

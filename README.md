@@ -174,10 +174,10 @@ invoice, so the buyer then holds two invoices for one order. Cancel the
 earlier one yourself if the new one replaces it. With a bank account set, the
 payment reference stays the order number.
 
-The plugin records each number it issues in the order's custom field
-`beliq_invoice_issued_numbers`, so a number stays used after you delete its
-document: the buyer may hold that invoice. Numbers issued by version 0.2.11
-or earlier are not recorded and count only while their document exists. Two
+The plugin records each number it issues in its own table, so a number stays
+used on every order after you delete its document: the buyer may hold that
+invoice. Numbers issued by version 0.2.11 or earlier are not recorded and
+count only while their document exists. Two
 creates for one order at once take two numbers: the second waits until the
 first has its number. The wait uses Shopware's lock store (`LOCK_DSN`); the
 default, `flock`, holds on one server only, so a shop that runs on several
@@ -247,8 +247,8 @@ leaves the record of the last automatic failure. A deleted order takes its row
 with it. The slots and timeouts are beliq's choice, sized from its own outages;
 no standard sets them.
 
-Uninstalling the plugin without keeping its data drops the table and the custom
-field set. The issued invoice numbers stay on the orders.
+Uninstalling the plugin without keeping its data drops the retry table, the
+table of issued invoice numbers and the custom field set.
 
 ## Requirements
 

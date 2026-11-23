@@ -11,6 +11,8 @@ use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
 use Beliq\Shopware\Tests\Support\FakeHttpClient;
+use Beliq\Shopware\Tests\Support\NumberDatabase;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
@@ -35,8 +37,6 @@ use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
-use Shopware\Core\Framework\Event\NestedEventCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -154,18 +154,33 @@ final class BeliqInvoiceRendererTest extends TestCase
         $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
         $order = $this->businessOrder('SW10042');
         // SW10042 was issued, then its document was deleted. The buyer may hold it.
-        $order->setCustomFields([IssuedInvoiceNumbers::FIELD => ['SW10042'], 'other' => 'kept']);
+        $numbers = NumberDatabase::connect();
+        (new IssuedInvoiceNumbers($numbers))->record($order->getId(), 'SW10042');
 
-        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, numbers: $numbers)
             ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
 
         self::assertSame('SW10042-2', $result->getOrderSuccess($order->getId())?->getNumber());
         $sent = json_decode((string) $http->lastCall()['body'], true);
         self::assertSame('SW10042-2', $sent['invoice']['number']);
         self::assertSame(
-            [IssuedInvoiceNumbers::FIELD => ['SW10042', 'SW10042-2'], 'other' => 'kept'],
-            $order->getCustomFields(),
+            [['number' => 'SW10042', 'order_id' => $order->getId()], ['number' => 'SW10042-2', 'order_id' => $order->getId()]],
+            self::issuedRows($numbers),
         );
+    }
+
+    public function testANumberAnotherOrderIssuedIsNotIssuedAgain(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('A-1-2');
+        // Order A-1 issued A-1-2 for its second document, which was deleted since.
+        $numbers = NumberDatabase::connect();
+        (new IssuedInvoiceNumbers($numbers))->record(Uuid::randomHex(), 'A-1-2');
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, numbers: $numbers)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('A-1-2-2', $result->getOrderSuccess($order->getId())?->getNumber());
     }
 
     public function testACreateBeforeTheLastDocumentIsStoredTakesTheNextNumber(): void
@@ -175,16 +190,17 @@ final class BeliqInvoiceRendererTest extends TestCase
         // the first one recorded.
         $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
         $order = $this->businessOrder('SW10042');
-        $renderer = $this->renderer($order, $this->config('zugferd', 'xml'), $http);
+        $numbers = NumberDatabase::connect();
+        $renderer = $this->renderer($order, $this->config('zugferd', 'xml'), $http, numbers: $numbers);
 
-        $numbers = [];
+        $created = [];
         foreach ([1, 2] as $create) {
             $result = $renderer->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
-            $numbers[] = $result->getOrderSuccess($order->getId())?->getNumber();
+            $created[] = $result->getOrderSuccess($order->getId())?->getNumber();
         }
 
-        self::assertSame(['SW10042', 'SW10042-2'], $numbers);
-        self::assertSame(['SW10042', 'SW10042-2'], $order->getCustomFields()[IssuedInvoiceNumbers::FIELD] ?? null);
+        self::assertSame(['SW10042', 'SW10042-2'], $created);
+        self::assertSame(['SW10042', 'SW10042-2'], array_column(self::issuedRows($numbers), 'number'));
     }
 
     public function testTheOrdersNumberLockIsHeldThroughTheGenerateCall(): void
@@ -217,13 +233,14 @@ final class BeliqInvoiceRendererTest extends TestCase
         $http = new FakeHttpClient(['status' => 422, 'body' => '{"error":{"code":"VALIDATION","message":"bad"}}', 'headers' => ['content-type' => 'application/json']]);
         $order = $this->businessOrder('SW10042');
         $locks = new LockFactory(new InMemoryStore());
+        $numbers = NumberDatabase::connect();
 
-        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, locks: $locks)
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, locks: $locks, numbers: $numbers)
             ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
 
         self::assertNotNull($result->getOrderError($order->getId()));
         // No document holds SW10042, so the next create still takes it.
-        self::assertNull($order->getCustomFields());
+        self::assertSame([], self::issuedRows($numbers));
         self::assertTrue($locks->createLock(BeliqInvoiceRenderer::NUMBER_LOCK . $order->getId())->acquire(false));
     }
 
@@ -545,6 +562,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         ?EntityRepository $orderRepository = null,
         array $shipped = [],
         ?LockFactory $locks = null,
+        ?Connection $numbers = null,
     ): BeliqInvoiceRenderer {
         if ($orderRepository === null) {
             $orderRepository = $this->createMock(EntityRepository::class);
@@ -558,16 +576,6 @@ final class BeliqInvoiceRendererTest extends TestCase
                     $context,
                 ),
             );
-            // Custom fields merge on update, as the DAL does.
-            $orderRepository->method('update')->willReturnCallback(
-                static function (array $data, Context $context) use ($order): EntityWrittenContainerEvent {
-                    foreach ($data as $row) {
-                        $order->setCustomFields(($row['customFields'] ?? []) + ($order->getCustomFields() ?? []));
-                    }
-
-                    return new EntityWrittenContainerEvent($context, new NestedEventCollection(), []);
-                },
-            );
         }
 
         return new BeliqInvoiceRenderer(
@@ -577,7 +585,7 @@ final class BeliqInvoiceRendererTest extends TestCase
             new InvoiceMapper(),
             $this->lookup($existingNumbers),
             $this->shippedDates($shipped),
-            new IssuedInvoiceNumbers($orderRepository),
+            new IssuedInvoiceNumbers($numbers ?? NumberDatabase::connect()),
             $locks ?? new LockFactory(new InMemoryStore()),
             $http,
         );
@@ -702,6 +710,17 @@ final class BeliqInvoiceRendererTest extends TestCase
         );
 
         return new InvoiceDocumentLookup($documentRepository);
+    }
+
+    /**
+     * @return list<array{number: string, order_id: string}>
+     */
+    private static function issuedRows(Connection $numbers): array
+    {
+        return array_map(
+            static fn (array $row): array => ['number' => $row['number'], 'order_id' => Uuid::fromBytesToHex($row['order_id'])],
+            $numbers->fetchAllAssociative('SELECT number, order_id FROM ' . IssuedInvoiceNumbers::TABLE . ' ORDER BY number'),
+        );
     }
 
     private function operation(string $orderId, string $fileType): DocumentGenerateOperation

@@ -16,7 +16,6 @@ const CURRENCY_EUR = 'b7d2554b0ce847cd82f3ac9bd1c0dfca';
 const SALES_CHANNEL_TYPE_STOREFRONT = '8a243080f92e4c719546314b577cf82b';
 const DOCUMENT_TYPE = 'beliq_invoice';
 const FAILURE_FIELD = 'beliq_invoice_failure';
-const ISSUED_FIELD = 'beliq_invoice_issued_numbers';
 
 spl_autoload_register(static function (string $class): void {
     $prefix = 'Beliq\\Shopware\\';
@@ -416,6 +415,11 @@ $stub = getenv('BELIQ_SMOKE_STUB') === '1';
 if ($apiKey === '' || $baseUrl === '') {
     fwrite(STDERR, "BELIQ_API_KEY and BELIQ_BASE_URL must be set.\n");
     exit(2);
+}
+
+if ($stub) {
+    // A run cut off in the two-creates case leaves the stub's delay set.
+    stubGenerateDelay($baseUrl, 0);
 }
 
 echo "== Preconditions ==\n";
@@ -899,8 +903,17 @@ try {
     if (count($documents) === 1) {
         checkInvoiceNumber($documents[0], $m . '-2', $stub, $baseUrl);
     }
-    $issued = orderCustomFields($order['id'])[ISSUED_FIELD] ?? null;
-    check($issued === [$m, $m . '-2'], 'the order records both issued numbers (got ' . json_encode($issued) . ')');
+
+    // The issued numbers count on every order: delete <order>-2 as well, and an
+    // order renumbered <order>-2 does not take that number for its own document.
+    foreach ($documents as $document) {
+        admin('DELETE', '/document/' . $document['id']);
+    }
+    $other = placeOrder($shop, $product19, 1, $germanBuyer);
+    admin('PATCH', '/order/' . $other['id'], ['orderNumber' => $m . '-2']);
+    transition($other['id'], 'paid');
+    $otherNumbers = array_column(beliqDocuments($other['id']), 'documentNumber');
+    check($otherNumbers === [$m . '-2-2'], 'the order renumbered ' . $m . '-2 takes ' . $m . '-2-2 (numbers: ' . implode(', ', $otherNumbers) . ')');
 } catch (Throwable $e) {
     check(false, 'the deleted-every-document case raised ' . $e->getMessage());
 }

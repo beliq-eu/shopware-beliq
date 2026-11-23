@@ -6,9 +6,10 @@
   0.2.11, after every beliq document of an order was deleted, the next one took
   the order number again as its document and invoice number (BT-1), although
   the buyer may hold an invoice with it. The plugin now records each number it
-  issues in the order's custom field `beliq_invoice_issued_numbers` and counts
-  those numbers as it counts the documents. Numbers issued before this version
-  are not recorded.
+  issues in its own table, `beliq_invoice_number`, and counts those numbers on
+  every order as it counts the documents. Numbers issued before this version
+  are not recorded. An uninstall that does not keep the plugin's data drops
+  the table.
 - Two creates for one order at once take two numbers. Up to 0.2.11 both could
   pick the same number, and the second failed with "Document number already
   exists" after its generate call had counted toward the beliq plan. The number

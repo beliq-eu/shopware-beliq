@@ -156,13 +156,13 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     throw new \RuntimeException('The beliq invoice number lock for the order was not acquired.');
                 }
                 try {
-                    $issued = $this->issuedNumbers->forOrder($order->getId(), $context);
+                    $issued = $this->issuedNumbers->inOrderNumberForm($source->number);
                     $documentNumber = $this->documents->nextNumber($source->number, $issued, $context);
 
                     $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
                     $generated = $client->generate(self::withInvoiceNumber($body, $documentNumber));
 
-                    $this->issuedNumbers->record($order->getId(), $issued, $documentNumber, $context);
+                    $this->issuedNumbers->record($order->getId(), $documentNumber);
                 } finally {
                     $lock->release();
                 }
