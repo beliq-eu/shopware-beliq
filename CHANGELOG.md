@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- A beliq document no longer takes a number issued before on its order. Up to
+  0.2.11, after every beliq document of an order was deleted, the next one took
+  the order number again as its document and invoice number (BT-1), although
+  the buyer may hold an invoice with it. The plugin now records each number it
+  issues in the order's custom field `beliq_invoice_issued_numbers` and counts
+  those numbers as it counts the documents. Numbers issued before this version
+  are not recorded.
+- Two creates for one order at once take two numbers. Up to 0.2.11 both could
+  pick the same number, and the second failed with "Document number already
+  exists" after its generate call had counted toward the beliq plan. The number
+  is now picked under a per-order lock from Shopware's lock store (`LOCK_DSN`).
+
 ## 0.2.11 (2026-11-23)
 
 - A 429 `DOCUMENT_CEILING_REACHED` is not tried again, the same as

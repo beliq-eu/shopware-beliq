@@ -18,6 +18,7 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
+use Symfony\Component\Lock\LockFactory;
 
 /**
  * Produces a beliq invoice as a first-class Shopware order document. This renderer
@@ -41,6 +42,11 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
 
     public const PREVIEW_NAME = 'beliq-invoice-preview.txt';
 
+    /**
+     * The key of the lock an order's number is picked under, followed by the order id.
+     */
+    public const NUMBER_LOCK = 'beliq-invoice-number-';
+
     public const PREVIEW_NOTICE = "beliq invoice: no preview\n\n"
         . "The plugin does not generate a preview: each document beliq generates counts\n"
         . "toward the documents per month of your beliq plan. Create the document to see it.\n\n"
@@ -48,6 +54,13 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         . "Das Plugin erstellt keine Vorschau: Jedes von beliq erstellte Dokument wird auf\n"
         . "die monatliche Dokumentenanzahl Ihres beliq-Tarifs angerechnet. Erstellen Sie das\n"
         . "Dokument, um es anzuzeigen.\n";
+
+    /**
+     * How long the number lock lives in a store that expires locks (Redis, a
+     * database). It spans one generate call, and the longest one gives up after
+     * RetrySchedule::LATER_ATTEMPT_TIMEOUT_SECONDS (90 s).
+     */
+    private const NUMBER_LOCK_TTL_SECONDS = 300.0;
 
     /**
      * @param EntityRepository<OrderCollection> $orderRepository
@@ -59,6 +72,8 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         private readonly InvoiceMapper $mapper,
         private readonly InvoiceDocumentLookup $documents,
         private readonly DeliveryShippedDates $shippedDates,
+        private readonly IssuedInvoiceNumbers $issuedNumbers,
+        private readonly LockFactory $locks,
         private readonly HttpClient $http = new CurlHttpClient(),
     ) {
     }
@@ -131,10 +146,26 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     continue;
                 }
 
-                $documentNumber = $this->documents->nextNumber($source->number, $context);
+                // Two creates for one order at once would read the same numbers
+                // and send the same invoice number; the second would then fail
+                // after a billed generate. The lock is held until the number is
+                // recorded, because the document itself is stored only after
+                // this method returns.
+                $lock = $this->locks->createLock(self::NUMBER_LOCK . $order->getId(), self::NUMBER_LOCK_TTL_SECONDS);
+                if (!$lock->acquire(true)) {
+                    throw new \RuntimeException('The beliq invoice number lock for the order was not acquired.');
+                }
+                try {
+                    $issued = $this->issuedNumbers->forOrder($order->getId(), $context);
+                    $documentNumber = $this->documents->nextNumber($source->number, $issued, $context);
 
-                $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
-                $generated = $client->generate(self::withInvoiceNumber($body, $documentNumber));
+                    $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
+                    $generated = $client->generate(self::withInvoiceNumber($body, $documentNumber));
+
+                    $this->issuedNumbers->record($order->getId(), $issued, $documentNumber, $context);
+                } finally {
+                    $lock->release();
+                }
 
                 $isPdf = str_contains($generated['contentType'], 'pdf');
                 // The 6.7 signature. 6.6 has a leading `string $html` parameter, so

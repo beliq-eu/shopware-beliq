@@ -6,6 +6,7 @@ use Beliq\Shopware\Config\PluginConfigProvider;
 use Beliq\Shopware\Document\BeliqInvoiceRenderer;
 use Beliq\Shopware\Document\DeliveryShippedDates;
 use Beliq\Shopware\Document\InvoiceDocumentLookup;
+use Beliq\Shopware\Document\IssuedInvoiceNumbers;
 use Beliq\Shopware\Exception\MissingOrderDataException;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
@@ -34,6 +35,8 @@ use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
+use Shopware\Core\Framework\Event\NestedEventCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -43,6 +46,8 @@ use Shopware\Core\System\StateMachine\Aggregation\StateMachineHistory\StateMachi
 use Shopware\Core\System\StateMachine\Aggregation\StateMachineHistory\StateMachineHistoryEntity;
 use Shopware\Core\System\StateMachine\Aggregation\StateMachineState\StateMachineStateEntity;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 /**
  * The renderer is the single place that turns an order into a beliq document: it
@@ -142,6 +147,84 @@ final class BeliqInvoiceRendererTest extends TestCase
         self::assertSame('SW10042-4', $doc->getConfig()['documentNumber'] ?? null);
         $sent = json_decode((string) $http->lastCall()['body'], true);
         self::assertSame('SW10042-4', $sent['invoice']['number']);
+    }
+
+    public function testANumberIssuedBeforeEveryDocumentWasDeletedIsNotIssuedAgain(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+        // SW10042 was issued, then its document was deleted. The buyer may hold it.
+        $order->setCustomFields([IssuedInvoiceNumbers::FIELD => ['SW10042'], 'other' => 'kept']);
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('SW10042-2', $result->getOrderSuccess($order->getId())?->getNumber());
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertSame('SW10042-2', $sent['invoice']['number']);
+        self::assertSame(
+            [IssuedInvoiceNumbers::FIELD => ['SW10042', 'SW10042-2'], 'other' => 'kept'],
+            $order->getCustomFields(),
+        );
+    }
+
+    public function testACreateBeforeTheLastDocumentIsStoredTakesTheNextNumber(): void
+    {
+        // Shopware stores a document after the renderer returns. A second create
+        // that gets the lock in between finds no document yet, only the number
+        // the first one recorded.
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+        $renderer = $this->renderer($order, $this->config('zugferd', 'xml'), $http);
+
+        $numbers = [];
+        foreach ([1, 2] as $create) {
+            $result = $renderer->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+            $numbers[] = $result->getOrderSuccess($order->getId())?->getNumber();
+        }
+
+        self::assertSame(['SW10042', 'SW10042-2'], $numbers);
+        self::assertSame(['SW10042', 'SW10042-2'], $order->getCustomFields()[IssuedInvoiceNumbers::FIELD] ?? null);
+    }
+
+    public function testTheOrdersNumberLockIsHeldThroughTheGenerateCall(): void
+    {
+        $order = $this->businessOrder('SW10042');
+        $locks = new LockFactory(new InMemoryStore());
+        $other = $locks->createLock(BeliqInvoiceRenderer::NUMBER_LOCK . $order->getId());
+        $otherOrder = $locks->createLock(BeliqInvoiceRenderer::NUMBER_LOCK . Uuid::randomHex());
+        $heldDuringGenerate = null;
+        $http = new FakeHttpClient(
+            ['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']],
+            static function () use ($other, $otherOrder, &$heldDuringGenerate): void {
+                $heldDuringGenerate = !$other->acquire(false);
+                // Another order's create is not held up.
+                self::assertTrue($otherOrder->acquire(false));
+                $otherOrder->release();
+            },
+        );
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, locks: $locks)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNotNull($result->getOrderSuccess($order->getId()));
+        self::assertTrue($heldDuringGenerate);
+        self::assertTrue($other->acquire(false), 'released after the create');
+    }
+
+    public function testAFailedGenerateRecordsNoNumberAndReleasesTheLock(): void
+    {
+        $http = new FakeHttpClient(['status' => 422, 'body' => '{"error":{"code":"VALIDATION","message":"bad"}}', 'headers' => ['content-type' => 'application/json']]);
+        $order = $this->businessOrder('SW10042');
+        $locks = new LockFactory(new InMemoryStore());
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, locks: $locks)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNotNull($result->getOrderError($order->getId()));
+        // No document holds SW10042, so the next create still takes it.
+        self::assertNull($order->getCustomFields());
+        self::assertTrue($locks->createLock(BeliqInvoiceRenderer::NUMBER_LOCK . $order->getId())->acquire(false));
     }
 
     public function testThePreviewIsALocalNoticeAndMakesNoBeliqCall(): void
@@ -461,6 +544,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         array $existingNumbers = [],
         ?EntityRepository $orderRepository = null,
         array $shipped = [],
+        ?LockFactory $locks = null,
     ): BeliqInvoiceRenderer {
         if ($orderRepository === null) {
             $orderRepository = $this->createMock(EntityRepository::class);
@@ -474,6 +558,16 @@ final class BeliqInvoiceRendererTest extends TestCase
                     $context,
                 ),
             );
+            // Custom fields merge on update, as the DAL does.
+            $orderRepository->method('update')->willReturnCallback(
+                static function (array $data, Context $context) use ($order): EntityWrittenContainerEvent {
+                    foreach ($data as $row) {
+                        $order->setCustomFields(($row['customFields'] ?? []) + ($order->getCustomFields() ?? []));
+                    }
+
+                    return new EntityWrittenContainerEvent($context, new NestedEventCollection(), []);
+                },
+            );
         }
 
         return new BeliqInvoiceRenderer(
@@ -483,6 +577,8 @@ final class BeliqInvoiceRendererTest extends TestCase
             new InvoiceMapper(),
             $this->lookup($existingNumbers),
             $this->shippedDates($shipped),
+            new IssuedInvoiceNumbers($orderRepository),
+            $locks ?? new LockFactory(new InMemoryStore()),
             $http,
         );
     }

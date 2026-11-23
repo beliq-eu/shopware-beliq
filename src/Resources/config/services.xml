@@ -24,6 +24,10 @@
             <argument type="service" id="state_machine_history.repository"/>
         </service>
 
+        <service id="Beliq\Shopware\Document\IssuedInvoiceNumbers">
+            <argument type="service" id="order.repository"/>
+        </service>
+
         <service id="Beliq\Shopware\Document\BeliqInvoiceRenderer">
             <argument type="service" id="order.repository"/>
             <argument type="service" id="Beliq\Shopware\Config\PluginConfigProvider"/>
@@ -31,6 +35,8 @@
             <argument type="service" id="Beliq\Shopware\Service\InvoiceMapper"/>
             <argument type="service" id="Beliq\Shopware\Document\InvoiceDocumentLookup"/>
             <argument type="service" id="Beliq\Shopware\Document\DeliveryShippedDates"/>
+            <argument type="service" id="Beliq\Shopware\Document\IssuedInvoiceNumbers"/>
+            <argument type="service" id="lock.factory"/>
             <argument type="service" id="Beliq\Shopware\Service\HttpClient"/>
             <tag name="document.renderer"/>
         </service>

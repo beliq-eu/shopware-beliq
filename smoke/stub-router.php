@@ -42,6 +42,15 @@ if ($method === 'GET' && $path === '/__smoke/last-generate') {
     return true;
 }
 
+// A delay on each generate answer, so two creates for one order overlap.
+$delayFile = sys_get_temp_dir() . '/beliq-smoke-stub-generate-delay-' . $_SERVER['SERVER_PORT'];
+
+if ($method === 'POST' && $path === '/__smoke/generate-delay') {
+    file_put_contents($delayFile, (string) (int) ($_GET['ms'] ?? 0));
+
+    return $json(200, ['ms' => (int) file_get_contents($delayFile)]);
+}
+
 if (($_SERVER['HTTP_X_API_KEY'] ?? '') === '') {
     return $json(401, ['success' => false, 'error' => ['code' => 'UNAUTHORIZED', 'message' => 'X-API-Key missing']]);
 }
@@ -54,6 +63,10 @@ if ($method === 'POST' && $path === '/v1/generate') {
     rewind($handle);
     fwrite($handle, (string) ($count + 1));
     fclose($handle);
+
+    if (is_file($delayFile)) {
+        usleep(1000 * (int) file_get_contents($delayFile));
+    }
 
     $raw = (string) file_get_contents('php://input');
     file_put_contents($lastBodyFile, $raw);

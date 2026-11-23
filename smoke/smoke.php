@@ -16,6 +16,7 @@ const CURRENCY_EUR = 'b7d2554b0ce847cd82f3ac9bd1c0dfca';
 const SALES_CHANNEL_TYPE_STOREFRONT = '8a243080f92e4c719546314b577cf82b';
 const DOCUMENT_TYPE = 'beliq_invoice';
 const FAILURE_FIELD = 'beliq_invoice_failure';
+const ISSUED_FIELD = 'beliq_invoice_issued_numbers';
 
 spl_autoload_register(static function (string $class): void {
     $prefix = 'Beliq\\Shopware\\';
@@ -230,6 +231,56 @@ function stubGenerateCount(string $baseUrl): int
     }
 
     return (int) $res['body'];
+}
+
+/** Makes stub-router.php wait $ms before it answers each generate call. */
+function stubGenerateDelay(string $baseUrl, int $ms): void
+{
+    $res = http('POST', $baseUrl . '/__smoke/generate-delay?ms=' . $ms, []);
+    if ($res['status'] !== 200) {
+        throw new RuntimeException('stub generate delay -> ' . $res['status']);
+    }
+}
+
+/**
+ * Sends one Admin API request $times at once and waits for all of them.
+ *
+ * @return list<array{status: int, body: ?array<string, mixed>}>
+ */
+function adminAtOnce(string $method, string $path, array $body, int $times): array
+{
+    $multi = curl_multi_init();
+    $handles = [];
+    for ($i = 0; $i < $times; $i++) {
+        $handle = curl_init(SHOP . '/api' . $path);
+        curl_setopt_array($handle, [
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . adminToken(), 'Accept: application/json', 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($body),
+        ]);
+        curl_multi_add_handle($multi, $handle);
+        $handles[] = $handle;
+    }
+    do {
+        $status = curl_multi_exec($multi, $running);
+        if ($running) {
+            curl_multi_select($multi);
+        }
+    } while ($running && $status === CURLM_OK);
+
+    $responses = [];
+    foreach ($handles as $handle) {
+        $responses[] = [
+            'status' => (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE),
+            'body' => json_decode((string) curl_multi_getcontent($handle), true),
+        ];
+        curl_multi_remove_handle($multi, $handle);
+    }
+    curl_multi_close($multi);
+
+    return $responses;
 }
 
 /** The body of the last generate call stub-router.php answered. */
@@ -826,6 +877,66 @@ try {
     }
 } catch (Throwable $e) {
     check(false, 'the other-order number case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: after every beliq document is deleted, a create takes a number never issued ==\n";
+try {
+    configure(array_merge($base, $cases['German XRechnung (xml)']['config']));
+    $order = placeOrder($shop, $product19, 1, $germanBuyer);
+    transition($order['id'], 'paid');
+    $m = $order['number'];
+    $first = beliqDocuments($order['id']);
+    check(array_column($first, 'documentNumber') === [$m], 'the paid transition stored ' . $m);
+    foreach ($first as $document) {
+        admin('DELETE', '/document/' . $document['id']);
+    }
+    check(beliqDocuments($order['id']) === [], 'the order holds no beliq document after the delete');
+    $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $order['id']]]);
+    check(($create['errors'] ?? []) === [], 'the create succeeds (' . json_encode($create['errors'] ?? []) . ')');
+    $documents = beliqDocuments($order['id']);
+    $numbers = array_column($documents, 'documentNumber');
+    check($numbers === [$m . '-2'], 'the new document is numbered ' . $m . '-2, not ' . $m . ' again (numbers: ' . implode(', ', $numbers) . ')');
+    if (count($documents) === 1) {
+        checkInvoiceNumber($documents[0], $m . '-2', $stub, $baseUrl);
+    }
+    $issued = orderCustomFields($order['id'])[ISSUED_FIELD] ?? null;
+    check($issued === [$m, $m . '-2'], 'the order records both issued numbers (got ' . json_encode($issued) . ')');
+} catch (Throwable $e) {
+    check(false, 'the deleted-every-document case raised ' . $e->getMessage());
+}
+
+echo "\n== Case: two creates at once for one order take two numbers ==\n";
+try {
+    $order = placeOrder($shop, $product19, 1, $germanBuyer);
+    transition($order['id'], 'paid');
+    $m = $order['number'];
+    $generatesBefore = $stub ? stubGenerateCount($baseUrl) : null;
+    if ($stub) {
+        // Without the lock, both creates pick a number before either document is
+        // stored, and the second fails with DOCUMENT__NUMBER_ALREADY_EXISTS.
+        stubGenerateDelay($baseUrl, 2000);
+    }
+    try {
+        $responses = adminAtOnce('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $order['id']]], 2);
+    } finally {
+        if ($stub) {
+            stubGenerateDelay($baseUrl, 0);
+        }
+    }
+    foreach ($responses as $i => $response) {
+        check(
+            $response['status'] === 200 && ($response['body']['errors'] ?? []) === [],
+            'create ' . ($i + 1) . ' succeeds (status ' . $response['status'] . ', ' . json_encode($response['body']['errors'] ?? null) . ')',
+        );
+    }
+    $numbers = array_column(beliqDocuments($order['id']), 'documentNumber');
+    sort($numbers);
+    check($numbers === [$m, $m . '-2', $m . '-3'], 'the order holds ' . $m . ', ' . $m . '-2 and ' . $m . '-3 (numbers: ' . implode(', ', $numbers) . ')');
+    if ($stub) {
+        check(stubGenerateCount($baseUrl) === $generatesBefore + 2, 'the two creates made two generate calls');
+    }
+} catch (Throwable $e) {
+    check(false, 'the two-creates case raised ' . $e->getMessage());
 }
 
 echo "\n== Case: the admin's Preview makes no beliq call ==\n";

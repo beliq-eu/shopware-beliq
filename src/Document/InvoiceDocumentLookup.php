@@ -13,8 +13,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\PrefixFilter;
 /**
  * Reads the beliq invoice documents already attached to an order. The generation
  * trigger skips a re-fired transition once a document exists (auto generation
- * never overwrites), and the renderer picks a number no beliq document holds,
- * because Shopware rejects a duplicate document number.
+ * never overwrites), and the renderer picks a number no beliq document holds and
+ * none was issued under, because Shopware rejects a duplicate document number.
  */
 final class InvoiceDocumentLookup
 {
@@ -43,13 +43,19 @@ final class InvoiceDocumentLookup
      * merchant deletes an earlier document. A number in neither form is never
      * handed out, so it does not count.
      *
+     * `$issued` holds the numbers recorded for the order (IssuedInvoiceNumbers).
+     * They count as documents do, so a number stays used after its document is
+     * deleted: the buyer may hold that invoice.
+     *
      * The numbers are read from the beliq documents of every order, because
      * Shopware's duplicate check spans them all: with dashes in the order number
      * range, another order's own number can have this order's suffix form (order
      * `A-1-2` next to order `A-1`). The numbers compare without regard to case,
      * as that check does under MySQL's default collation.
+     *
+     * @param list<string> $issued
      */
-    public function nextNumber(string $orderNumber, Context $context): string
+    public function nextNumber(string $orderNumber, array $issued, Context $context): string
     {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('documentType.technicalName', BeliqInvoiceRenderer::TYPE));
@@ -60,9 +66,12 @@ final class InvoiceDocumentLookup
 
         $form = '/^' . preg_quote($orderNumber, '/') . '(?:-([1-9][0-9]*))?$/iuD';
         $documents = $this->documentRepository->search($criteria, $context)->getEntities();
-        $highest = 0;
+        $numbers = $issued;
         foreach ($documents as $document) {
-            $number = $document->getDocumentNumber();
+            $numbers[] = $document->getDocumentNumber();
+        }
+        $highest = 0;
+        foreach ($numbers as $number) {
             if ($number !== null && preg_match($form, $number, $match) === 1) {
                 $highest = max($highest, isset($match[1]) ? (int) $match[1] : 1);
             }

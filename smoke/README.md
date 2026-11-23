@@ -49,6 +49,12 @@ configured reason, and the others carry none. More cases:
 - another order renumbered `<order>-5` takes that number for its own
   document, and a create by hand on the first order succeeds as `<order>-6`,
   with that invoice number;
+- after every beliq document of a new order is deleted, a create by hand
+  succeeds as `<order>-2`, with that invoice number, and the order's
+  `beliq_invoice_issued_numbers` custom field holds both numbers;
+- two creates by hand at once on a new order both succeed, as `<order>-2`
+  and `<order>-3`; a stub run delays each generate answer by 2 s, so the two
+  creates overlap;
 - the admin's Preview returns the plugin's local notice, stores nothing and,
   in a stub run, makes no generate call.
 

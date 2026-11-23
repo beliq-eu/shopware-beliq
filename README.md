@@ -166,16 +166,24 @@ XML or a hybrid PDF, depending on the format you chose.
 The first beliq document on an order takes the order number. Creating the
 document again from the Documents tab adds one numbered `<order number>-<n>`,
 with n one more than the highest such number held by a beliq document of any
-order, compared without regard to case. That document is a new invoice, not a
+order or issued on this order before, compared without regard to case. That document is a new invoice, not a
 copy: its invoice number (BT-1) is its document number, and its lines show
 the order as it is when you create it. Its issue date (BT-2) stays the order
 date, as for the first document, and it does not refer to the earlier
 invoice, so the buyer then holds two invoices for one order. Cancel the
 earlier one yourself if the new one replaces it. With a bank account set, the
-payment reference stays the order number. After
-you delete every beliq document of an order, the next one takes the order
-number again, which the buyer may already hold as an invoice number. The
-Preview button of that dialog shows a short notice instead of the document:
+payment reference stays the order number.
+
+The plugin records each number it issues in the order's custom field
+`beliq_invoice_issued_numbers`, so a number stays used after you delete its
+document: the buyer may hold that invoice. Numbers issued by version 0.2.11
+or earlier are not recorded and count only while their document exists. Two
+creates for one order at once take two numbers: the second waits until the
+first has its number. The wait uses Shopware's lock store (`LOCK_DSN`); the
+default, `flock`, holds on one server only, so a shop that runs on several
+servers needs a shared store there.
+
+The Preview button of that dialog shows a short notice instead of the document:
 each document beliq generates counts toward the documents per month of your
 beliq plan, and a preview would be one.
 
@@ -240,7 +248,7 @@ with it. The slots and timeouts are beliq's choice, sized from its own outages;
 no standard sets them.
 
 Uninstalling the plugin without keeping its data drops the table and the custom
-field set.
+field set. The issued invoice numbers stay on the orders.
 
 ## Requirements
 
