@@ -158,6 +158,23 @@ final class RetryScheduleTest extends TestCase
         self::assertNull(RetrySchedule::afterFailure($state, self::api(429, 'RATE_LIMITED'), self::T0 + 845));
     }
 
+    public function testAQuotaRefusalEndsTheRetriesEvenWhenItsWaitIsShort(): void
+    {
+        // beliq's Retry-After on both runs to the end of the billing window, so a
+        // short one means the window turns within minutes. A throttle with the
+        // same wait is retried after it; a quota refusal is not retried at all.
+        $throttled = RetrySchedule::afterFailure(RetrySchedule::start(self::T0), self::api(429, 'RATE_LIMITED', retryAfter: 300), self::T0);
+        self::assertNotNull($throttled);
+        self::assertSame(self::T0 + 300, $throttled->nextAttemptAt);
+
+        foreach (['QUOTA_EXCEEDED', 'DOCUMENT_CEILING_REACHED'] as $code) {
+            self::assertNull(
+                RetrySchedule::afterFailure(RetrySchedule::start(self::T0), self::api(429, $code, retryAfter: 300), self::T0),
+                $code,
+            );
+        }
+    }
+
     public function testAClaimLeasesTheAttemptPastItsOwnTimeout(): void
     {
         // An attempt run late, at minute 9, would otherwise leave the next slot

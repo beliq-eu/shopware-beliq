@@ -199,9 +199,10 @@ failure is never retried (the Node SDK retries it by count):
 - A failure that may have run at beliq is tried at most 3 times, and only within
   the first 15 minutes, however late the task runs: `ENGINE_UNAVAILABLE` or
   another coded 502 or 503, a 429 other than `QUOTA_EXCEEDED` and
-  `DOCUMENT_CEILING_REACHED`, a connection lost after the request was sent, and the first attempt's own timeout. beliq does
-  not charge a repeat of a request it charged in the last 15 minutes, with a key
-  of the same mode, up to 10 repeats
+  `DOCUMENT_CEILING_REACHED`, a connection lost after the request was sent, and
+  the first attempt's own timeout. beliq does not charge a repeat of a request
+  it charged in the last 15 minutes, with a key of the same mode, up to 10
+  repeats
   ([Repeated requests](https://docs.beliq.eu/api-reference/errors/#repeated-requests-are-not-charged-again));
   a later repeat of a request whose answer was lost would be charged again.
 - The first attempt runs inside the state change with a 30 s timeout; the later
@@ -217,9 +218,10 @@ failure is never retried (the Node SDK retries it by count):
   attempt past the 60-minute slot ends the retries.
 - Nothing else is retried: a 429 `QUOTA_EXCEEDED` or `DOCUMENT_CEILING_REACHED`
   lasts until the billing window turns or the account raises its cap or its
-  plan, a 4xx would send the same order data to the same answer, and a TLS failure or a malformed base URL is not fixed by waiting. The
-  failure stays in the order's custom fields, and a beliq e-invoice can be
-  created by hand from the order's Documents tab.
+  plan, any other 4xx would send the same order data to the same answer, and a
+  TLS failure or a malformed base URL is not fixed by waiting. The failure stays
+  in the order's custom fields, and a beliq e-invoice can be created by hand
+  from the order's Documents tab.
 
 The later attempts are rows in the plugin's `beliq_invoice_retry` table, worked
 through by the scheduled task `beliq.invoice_retry` every minute. A shop that
