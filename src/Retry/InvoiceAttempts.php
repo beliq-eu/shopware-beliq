@@ -15,7 +15,9 @@ use Shopware\Core\Framework\Context;
  */
 final class InvoiceAttempts
 {
-    /** Orders one task run takes, so a long outage's backlog drains over several runs. */
+    /**
+     * Orders one task run takes, so a long outage's backlog drains over several runs.
+     */
     public const DUE_PER_RUN = 20;
 
     public function __construct(
@@ -40,14 +42,16 @@ final class InvoiceAttempts
         $this->attempt($orderId, $salesChannelId, false, $state, $context);
     }
 
-    /** @return int the number of attempts this run made */
+    /**
+     * @return int the number of attempts this run made
+     */
     public function runDue(Context $context): int
     {
         $made = 0;
         foreach ($this->store->due($this->now(), self::DUE_PER_RUN) as $row) {
             try {
                 if ($this->later($row['orderId'], $row['salesChannelId'], $row['lastError'], $row['state'], $context)) {
-                    $made++;
+                    ++$made;
                 }
             } catch (\Throwable $e) {
                 $this->logger->error('beliq invoice retry failed', ['orderId' => $row['orderId'], 'exception' => $e->getMessage()]);

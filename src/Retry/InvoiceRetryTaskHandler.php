@@ -12,7 +12,9 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 #[AsMessageHandler(handles: InvoiceRetryTask::class)]
 final class InvoiceRetryTaskHandler extends ScheduledTaskHandler
 {
-    /** @param EntityRepository<ScheduledTaskCollection> $scheduledTaskRepository */
+    /**
+     * @param EntityRepository<ScheduledTaskCollection> $scheduledTaskRepository
+     */
     public function __construct(
         EntityRepository $scheduledTaskRepository,
         LoggerInterface $logger,

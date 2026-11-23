@@ -46,7 +46,9 @@ final class OrderAdapter
      */
     private const BUYER_REFERENCE_FIELD = 'beliq_buyer_reference';
 
-    /** The labels of the tax-free settings in config.xml, named in a failure. */
+    /**
+     * The labels of the tax-free settings in config.xml, named in a failure.
+     */
     private const TAX_FREE_EU_BUSINESS_SETTING = 'Tax-free orders to businesses in other EU countries';
     private const TAX_FREE_NON_EU_SETTING = 'Tax-free orders outside the EU';
 
@@ -54,8 +56,8 @@ final class OrderAdapter
 
     /**
      * @param (\Closure(list<string>): array<string, list<string>>)|null $shippedDates
-     *     per delivery id, the Y-m-d dates the delivery was set to shipped
-     *     (DeliveryShippedDates); read only for an order in category K
+     *                                                                                 per delivery id, the Y-m-d dates the delivery was set to shipped
+     *                                                                                 (DeliveryShippedDates); read only for an order in category K
      */
     public function toSourceOrder(OrderEntity $order, PluginConfig $config, ?\Closure $shippedDates = null): SourceOrder
     {
@@ -254,7 +256,7 @@ final class OrderAdapter
 
     /**
      * @param string|null $taxFreeCategory the category of a tax-free order, whose
-     *     lines carry no VAT: their total is their net, at 0%
+     *                                     lines carry no VAT: their total is their net, at 0%
      */
     private function toSourceLine(OrderLineItemEntity $item, string $taxStatus, ?string $taxFreeCategory): SourceLine
     {

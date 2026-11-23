@@ -162,6 +162,7 @@ final class InvoiceMapper
      * summed taxable amount. Sorted by category then rate for a stable result.
      *
      * @param list<SourceLine> $lines
+     *
      * @return list<array<string, string|float>>
      */
     private function buildTaxSummary(array $lines, SourceOrder $order): array

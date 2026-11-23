@@ -6,10 +6,14 @@ use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 
-/** Writes the last failure into the order's beliq custom fields (OrderFailureFields). */
+/**
+ * Writes the last failure into the order's beliq custom fields (OrderFailureFields).
+ */
 final class OrderCustomFieldRecorder implements FailureRecorder
 {
-    /** @param EntityRepository<OrderCollection> $orderRepository */
+    /**
+     * @param EntityRepository<OrderCollection> $orderRepository
+     */
     public function __construct(private readonly EntityRepository $orderRepository)
     {
     }
@@ -37,7 +41,9 @@ final class OrderCustomFieldRecorder implements FailureRecorder
         $this->write($orderId, [OrderFailureFields::NEXT_ATTEMPT_AT => null], $context);
     }
 
-    /** @param array<string, ?string> $fields */
+    /**
+     * @param array<string, ?string> $fields
+     */
     private function write(string $orderId, array $fields, Context $context): void
     {
         // Custom fields merge on update, so the order's other custom fields stay.

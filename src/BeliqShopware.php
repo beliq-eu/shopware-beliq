@@ -43,7 +43,9 @@ class BeliqShopware extends Plugin
         }
     }
 
-    /** @return EntityRepository<\Shopware\Core\System\CustomField\Aggregate\CustomFieldSet\CustomFieldSetCollection> */
+    /**
+     * @return EntityRepository<\Shopware\Core\System\CustomField\Aggregate\CustomFieldSet\CustomFieldSetCollection>
+     */
     private function customFieldSets(): EntityRepository
     {
         $repository = $this->container?->get('custom_field_set.repository');

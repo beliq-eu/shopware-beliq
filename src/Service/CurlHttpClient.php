@@ -4,7 +4,9 @@ namespace Beliq\Shopware\Service;
 
 use Beliq\Shopware\Exception\BeliqTransportException;
 
-/** A cURL-backed HttpClient with no framework dependency. */
+/**
+ * A cURL-backed HttpClient with no framework dependency.
+ */
 final class CurlHttpClient implements HttpClient
 {
     /**
@@ -77,5 +79,4 @@ final class CurlHttpClient implements HttpClient
             'headers' => $responseHeaders,
         ];
     }
-
 }

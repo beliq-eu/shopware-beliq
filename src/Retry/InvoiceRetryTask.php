@@ -12,7 +12,9 @@ use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTask;
  */
 final class InvoiceRetryTask extends ScheduledTask
 {
-    /** Every minute, the resolution of the attempt slots. */
+    /**
+     * Every minute, the resolution of the attempt slots.
+     */
     private const INTERVAL_SECONDS = 60;
 
     public static function getTaskName(): string

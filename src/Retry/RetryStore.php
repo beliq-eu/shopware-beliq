@@ -31,7 +31,9 @@ final class RetryStore
         return $row === false ? null : self::state($row);
     }
 
-    /** False when the order already has a row, so another attempt is under way. */
+    /**
+     * False when the order already has a row, so another attempt is under way.
+     */
     public function start(string $orderId, string $salesChannelId, RetryState $state): bool
     {
         try {
@@ -51,7 +53,9 @@ final class RetryStore
         return true;
     }
 
-    /** True when this caller got the attempt: the row still was as $seen and due. */
+    /**
+     * True when this caller got the attempt: the row still was as $seen and due.
+     */
     public function claim(string $orderId, RetryState $seen, RetryState $claimed, int $now): bool
     {
         return $this->connection->executeStatement(
@@ -85,7 +89,9 @@ final class RetryStore
         $this->connection->delete(self::TABLE, ['order_id' => Uuid::fromHexToBytes($orderId)]);
     }
 
-    /** @return list<array{orderId: string, salesChannelId: string, lastError: ?string, state: RetryState}> */
+    /**
+     * @return list<array{orderId: string, salesChannelId: string, lastError: ?string, state: RetryState}>
+     */
     public function due(int $now, int $limit): array
     {
         $rows = $this->connection->fetchAllAssociative(
@@ -102,7 +108,9 @@ final class RetryStore
         ], $rows);
     }
 
-    /** @param array<string, mixed> $row */
+    /**
+     * @param array<string, mixed> $row
+     */
     private static function state(array $row): RetryState
     {
         return new RetryState(
