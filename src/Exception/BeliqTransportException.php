@@ -11,22 +11,34 @@ namespace Beliq\Shopware\Exception;
  */
 final class BeliqTransportException extends \RuntimeException
 {
-    /** The host was not found or refused the connection: nothing was sent. */
+    /**
+     * The host was not found or refused the connection: nothing was sent.
+     */
     public const CONNECT_FAILED = 'connect_failed';
 
-    /** The connection (TLS included) was not up before the connect timeout: nothing was sent. */
+    /**
+     * The connection (TLS included) was not up before the connect timeout: nothing was sent.
+     */
     public const CONNECT_TIMEOUT = 'connect_timeout';
 
-    /** The request was sent and no answer came before this client's own timeout. */
+    /**
+     * The request was sent and no answer came before this client's own timeout.
+     */
     public const TIMEOUT = 'timeout';
 
-    /** The connection broke after it was open, so the request may have reached beliq. */
+    /**
+     * The connection broke after it was open, so the request may have reached beliq.
+     */
     public const CONNECTION_LOST = 'connection_lost';
 
-    /** The TLS handshake or the certificate failed: waiting does not fix it. */
+    /**
+     * The TLS handshake or the certificate failed: waiting does not fix it.
+     */
     public const TLS = 'tls';
 
-    /** The base URL or its scheme is wrong: waiting does not fix it. */
+    /**
+     * The base URL or its scheme is wrong: waiting does not fix it.
+     */
     public const CONFIGURATION = 'configuration';
 
     // libcurl's error numbers (curl/curl.h), written out so the mapping works
@@ -47,7 +59,9 @@ final class BeliqTransportException extends \RuntimeException
     private const CURLE_SSL_CACERT_BADFILE = 77;
     private const CURLE_SSL_PINNEDPUBKEYNOTMATCH = 90;
 
-    /** @param Kind $kind */
+    /**
+     * @param Kind $kind
+     */
     public function __construct(public readonly string $kind, string $message)
     {
         parent::__construct($message);

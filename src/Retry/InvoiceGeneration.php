@@ -4,7 +4,9 @@ namespace Beliq\Shopware\Retry;
 
 use Shopware\Core\Framework\Context;
 
-/** One attempt at an order's automatic beliq invoice. */
+/**
+ * One attempt at an order's automatic beliq invoice.
+ */
 interface InvoiceGeneration
 {
     /**

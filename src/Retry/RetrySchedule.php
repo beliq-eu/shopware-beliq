@@ -41,14 +41,18 @@ final class RetrySchedule
     public const COUNT = 'count';
     public const NONE = 'none';
 
-    /** Seconds after the first attempt at which each later attempt is due. */
+    /**
+     * Seconds after the first attempt at which each later attempt is due.
+     */
     public const LATER_ATTEMPT_OFFSETS = [120, 300, 600, 840, 1800, 3600];
 
     public const COUNT_CLASS_RETRIES = 3;
 
     public const COUNT_CLASS_WINDOW_SECONDS = 900;
 
-    /** The per-attempt timeout of the beliq SDKs, which a later attempt uses. */
+    /**
+     * The per-attempt timeout of the beliq SDKs, which a later attempt uses.
+     */
     public const LATER_ATTEMPT_TIMEOUT_SECONDS = 90;
 
     /**
@@ -64,7 +68,9 @@ final class RetrySchedule
     private const QUOTA_EXHAUSTED_CODES = ['QUOTA_EXCEEDED', 'DOCUMENT_CEILING_REACHED'];
     private const DATABASE_UNAVAILABLE_CODE = 'DATABASE_UNAVAILABLE';
 
-    /** @return self::WINDOW|self::COUNT|self::NONE */
+    /**
+     * @return self::WINDOW|self::COUNT|self::NONE
+     */
     public static function classify(\Throwable $failure, bool $firstAttempt): string
     {
         if ($failure instanceof BeliqApiException) {
@@ -87,7 +93,9 @@ final class RetrySchedule
         return new RetryState($now, 0, 0, $now + self::LATER_ATTEMPT_OFFSETS[0]);
     }
 
-    /** The state to write before a later attempt's call, so a process killed mid-call leaves the next attempt in place. */
+    /**
+     * The state to write before a later attempt's call, so a process killed mid-call leaves the next attempt in place.
+     */
     public static function claim(RetryState $state, int $now): RetryState
     {
         $laterAttempts = $state->laterAttempts + 1;
@@ -101,13 +109,17 @@ final class RetrySchedule
         );
     }
 
-    /** True when the due attempt may not start any more: a count-class retry past its 15 minutes. */
+    /**
+     * True when the due attempt may not start any more: a count-class retry past its 15 minutes.
+     */
     public static function expired(RetryState $state, int $now): bool
     {
         return $state->notAfter !== null && $now > $state->notAfter;
     }
 
-    /** The state after a failed attempt, or null when no attempt follows. */
+    /**
+     * The state after a failed attempt, or null when no attempt follows.
+     */
     public static function afterFailure(RetryState $state, \Throwable $failure, int $now): ?RetryState
     {
         $class = self::classify($failure, $state->laterAttempts === 0);
@@ -120,14 +132,14 @@ final class RetrySchedule
             if ($countRetries >= self::COUNT_CLASS_RETRIES) {
                 return null;
             }
-            $countRetries++;
+            ++$countRetries;
         }
 
         // Slots that passed while beliq asked for a longer wait, or while no task
         // ran, are skipped rather than run back to back.
         $laterAttempts = $state->laterAttempts;
         while (($slot = self::slot($state->firstAttemptAt, $laterAttempts)) !== null && $slot < $now) {
-            $laterAttempts++;
+            ++$laterAttempts;
         }
         if ($slot === null) {
             return null;
@@ -156,7 +168,9 @@ final class RetrySchedule
         return $state->laterAttempts >= count(self::LATER_ATTEMPT_OFFSETS);
     }
 
-    /** What the order shows: the beliq error code, the transport class, or the plugin's own message. */
+    /**
+     * What the order shows: the beliq error code, the transport class, or the plugin's own message.
+     */
     public static function describe(\Throwable $failure): string
     {
         if ($failure instanceof BeliqApiException) {
@@ -169,7 +183,9 @@ final class RetrySchedule
         return mb_substr($failure->getMessage(), 0, 255);
     }
 
-    /** @return self::WINDOW|self::COUNT|self::NONE */
+    /**
+     * @return self::WINDOW|self::COUNT|self::NONE
+     */
     private static function classifyStatus(int $status, string $code): string
     {
         if ($status === 429) {
@@ -186,7 +202,9 @@ final class RetrySchedule
         return $status === 503 && $code === self::DATABASE_UNAVAILABLE_CODE ? self::WINDOW : self::COUNT;
     }
 
-    /** When the slot after $laterAttempts used ones is due, or null when none is left. */
+    /**
+     * When the slot after $laterAttempts used ones is due, or null when none is left.
+     */
     private static function slot(int $firstAttemptAt, int $laterAttempts): ?int
     {
         $offset = self::LATER_ATTEMPT_OFFSETS[$laterAttempts] ?? null;

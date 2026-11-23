@@ -15,7 +15,9 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  */
 final class PluginConfigProvider
 {
-    /** System-config domain for this plugin's settings. */
+    /**
+     * System-config domain for this plugin's settings.
+     */
     public const DOMAIN = 'BeliqShopware.config.';
 
     private const DEFAULT_BASE_URL = 'https://api.beliq.eu';
@@ -48,7 +50,9 @@ final class PluginConfigProvider
     private const TAX_FREE_EU_BUSINESS_CATEGORIES = ['AE', 'K'];
     private const TAX_FREE_NON_EU_CATEGORIES = ['G', 'O'];
 
-    /** UNTDID 4461 credit-transfer payment means. 58 is SEPA credit transfer. */
+    /**
+     * UNTDID 4461 credit-transfer payment means. 58 is SEPA credit transfer.
+     */
     private const PAYMENT_MEANS_CODES = ['58', '30'];
     private const DEFAULT_PAYMENT_MEANS_CODE = '58';
 
