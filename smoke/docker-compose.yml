@@ -10,7 +10,7 @@ name: beliq-shopware-smoke
 
 services:
   shop:
-    image: dockware/shopware:6.7.16.0
+    image: dockware/shopware:6.7.16.1
     ports:
       - "127.0.0.1:8090:80"
     environment:
