@@ -37,6 +37,7 @@
             <argument type="service" id="Beliq\Shopware\Document\DeliveryShippedDates"/>
             <argument type="service" id="Beliq\Shopware\Document\IssuedInvoiceNumbers"/>
             <argument type="service" id="lock.factory"/>
+            <argument type="service" id="logger"/>
             <argument type="service" id="Beliq\Shopware\Service\HttpClient"/>
             <tag name="document.renderer"/>
         </service>

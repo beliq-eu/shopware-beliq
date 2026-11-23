@@ -57,14 +57,15 @@ final class IssuedInvoiceNumbersTest extends TestCase
     /** The SQLite table the tests use must have the migration's columns and key. */
     public function testTheTestDatabaseHasTheMigrationsColumns(): void
     {
-        $sql = '';
+        $statements = [];
         $connection = $this->createMock(Connection::class);
-        $connection->method('executeStatement')->willReturnCallback(static function (string $statement) use (&$sql): int {
-            $sql = $statement;
+        $connection->method('executeStatement')->willReturnCallback(static function (string $statement) use (&$statements): int {
+            $statements[] = $statement;
 
             return 0;
         });
         (new Migration1795392000BeliqInvoiceNumber())->update($connection);
+        $sql = $statements[0];
 
         preg_match_all('/^\s+`(\w+)`\s+[A-Z]/m', $sql, $match);
         $columns = array_column(NumberDatabase::connect()->fetchAllAssociative('PRAGMA table_info(' . IssuedInvoiceNumbers::TABLE . ')'), 'name');

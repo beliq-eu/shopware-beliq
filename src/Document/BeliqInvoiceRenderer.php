@@ -8,6 +8,7 @@ use Beliq\Shopware\Service\CurlHttpClient;
 use Beliq\Shopware\Service\HttpClient;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
+use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Document\Renderer\AbstractDocumentRenderer;
 use Shopware\Core\Checkout\Document\Renderer\DocumentRendererConfig;
 use Shopware\Core\Checkout\Document\Renderer\RenderedDocument;
@@ -74,6 +75,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         private readonly DeliveryShippedDates $shippedDates,
         private readonly IssuedInvoiceNumbers $issuedNumbers,
         private readonly LockFactory $locks,
+        private readonly LoggerInterface $logger,
         private readonly HttpClient $http = new CurlHttpClient(),
     ) {
     }
@@ -151,7 +153,9 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 // after a billed generate. The lock is held until the number is
                 // recorded, because the document itself is stored only after
                 // this method returns.
-                $lock = $this->locks->createLock(self::NUMBER_LOCK . $order->getId(), self::NUMBER_LOCK_TTL_SECONDS);
+                // No release on destruction: after a failed release below, the
+                // destructor would try again and throw outside this method's catch.
+                $lock = $this->locks->createLock(self::NUMBER_LOCK . $order->getId(), self::NUMBER_LOCK_TTL_SECONDS, false);
                 if (!$lock->acquire(true)) {
                     throw new \RuntimeException('The beliq invoice number lock for the order was not acquired.');
                 }
@@ -162,9 +166,29 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
                     $generated = $client->generate(self::withInvoiceNumber($body, $documentNumber));
 
-                    $this->issuedNumbers->record($order->getId(), $documentNumber);
+                    // The generate has counted toward the plan by now, so a failed
+                    // record keeps the document. While the document exists, its
+                    // number is not issued again.
+                    try {
+                        $this->issuedNumbers->record($order->getId(), $documentNumber);
+                    } catch (\Throwable $e) {
+                        $this->logger->error('beliq invoice number not recorded', [
+                            'orderId' => $order->getId(),
+                            'number' => $documentNumber,
+                            'exception' => $e->getMessage(),
+                        ]);
+                    }
                 } finally {
-                    $lock->release();
+                    // A lock store that expires locks frees it after the TTL, so a
+                    // failed release does not cost the merchant the document.
+                    try {
+                        $lock->release();
+                    } catch (\Throwable $e) {
+                        $this->logger->error('beliq invoice number lock not released', [
+                            'orderId' => $order->getId(),
+                            'exception' => $e->getMessage(),
+                        ]);
+                    }
                 }
 
                 $isPdf = str_contains($generated['contentType'], 'pdf');

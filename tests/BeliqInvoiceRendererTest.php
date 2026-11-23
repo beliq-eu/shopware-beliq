@@ -14,6 +14,9 @@ use Beliq\Shopware\Tests\Support\FakeHttpClient;
 use Beliq\Shopware\Tests\Support\NumberDatabase;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\Price\Struct\CartPrice;
@@ -47,6 +50,8 @@ use Shopware\Core\System\StateMachine\Aggregation\StateMachineHistory\StateMachi
 use Shopware\Core\System\StateMachine\Aggregation\StateMachineState\StateMachineStateEntity;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Key;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 /**
@@ -242,6 +247,64 @@ final class BeliqInvoiceRendererTest extends TestCase
         // No document holds SW10042, so the next create still takes it.
         self::assertSame([], self::issuedRows($numbers));
         self::assertTrue($locks->createLock(BeliqInvoiceRenderer::NUMBER_LOCK . $order->getId())->acquire(false));
+    }
+
+    public function testAFailedRecordKeepsTheBilledDocument(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+        $numbers = NumberDatabase::connect();
+        $numbers->executeStatement("CREATE TRIGGER refuse BEFORE INSERT ON beliq_invoice_number BEGIN SELECT RAISE(ABORT, 'refused'); END");
+        $logger = self::recordingLogger();
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, numbers: $numbers, logger: $logger)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderError($order->getId()));
+        self::assertSame('SW10042', $result->getOrderSuccess($order->getId())?->getNumber());
+        self::assertSame(['beliq invoice number not recorded'], $logger->messages);
+    }
+
+    public function testAFailedLockReleaseKeepsTheBilledDocument(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+        $store = new class implements PersistingStoreInterface {
+            private InMemoryStore $inner;
+
+            public function __construct()
+            {
+                $this->inner = new InMemoryStore();
+            }
+
+            public function save(Key $key): void
+            {
+                $this->inner->save($key);
+            }
+
+            public function delete(Key $key): void
+            {
+                throw new \RuntimeException('lock store unreachable');
+            }
+
+            public function exists(Key $key): bool
+            {
+                return $this->inner->exists($key);
+            }
+
+            public function putOffExpiration(Key $key, float $ttl): void
+            {
+                $this->inner->putOffExpiration($key, $ttl);
+            }
+        };
+        $logger = self::recordingLogger();
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, locks: new LockFactory($store), logger: $logger)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertNull($result->getOrderError($order->getId()));
+        self::assertSame('SW10042', $result->getOrderSuccess($order->getId())?->getNumber());
+        self::assertSame(['beliq invoice number lock not released'], $logger->messages);
     }
 
     public function testThePreviewIsALocalNoticeAndMakesNoBeliqCall(): void
@@ -563,6 +626,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         array $shipped = [],
         ?LockFactory $locks = null,
         ?Connection $numbers = null,
+        ?LoggerInterface $logger = null,
     ): BeliqInvoiceRenderer {
         if ($orderRepository === null) {
             $orderRepository = $this->createMock(EntityRepository::class);
@@ -587,6 +651,7 @@ final class BeliqInvoiceRendererTest extends TestCase
             $this->shippedDates($shipped),
             new IssuedInvoiceNumbers($numbers ?? NumberDatabase::connect()),
             $locks ?? new LockFactory(new InMemoryStore()),
+            $logger ?? new NullLogger(),
             $http,
         );
     }
@@ -710,6 +775,19 @@ final class BeliqInvoiceRendererTest extends TestCase
         );
 
         return new InvoiceDocumentLookup($documentRepository);
+    }
+
+    private static function recordingLogger(): AbstractLogger
+    {
+        return new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $messages = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->messages[] = (string) $message;
+            }
+        };
     }
 
     /**

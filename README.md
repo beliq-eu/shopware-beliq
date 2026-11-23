@@ -166,8 +166,9 @@ XML or a hybrid PDF, depending on the format you chose.
 The first beliq document on an order takes the order number. Creating the
 document again from the Documents tab adds one numbered `<order number>-<n>`,
 with n one more than the highest such number held by a beliq document of any
-order or issued on this order before, compared without regard to case. That document is a new invoice, not a
-copy: its invoice number (BT-1) is its document number, and its lines show
+order or issued before on any order, compared without regard to case. That
+document is a new invoice, not a copy: its invoice number (BT-1) is its
+document number, and its lines show
 the order as it is when you create it. Its issue date (BT-2) stays the order
 date, as for the first document, and it does not refer to the earlier
 invoice, so the buyer then holds two invoices for one order. Cancel the
@@ -176,8 +177,9 @@ payment reference stays the order number.
 
 The plugin records each number it issues in its own table, so a number stays
 used on every order after you delete its document: the buyer may hold that
-invoice. Numbers issued by version 0.2.11 or earlier are not recorded and
-count only while their document exists. Two
+invoice. An update from version 0.2.11 or earlier records the numbers of the
+beliq documents stored then; a number whose document was deleted before the
+update is not recorded. Two
 creates for one order at once take two numbers: the second waits until the
 first has its number. The wait uses Shopware's lock store (`LOCK_DSN`); the
 default, `flock`, holds on one server only, so a shop that runs on several
