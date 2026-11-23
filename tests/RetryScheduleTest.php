@@ -29,6 +29,7 @@ final class RetryScheduleTest extends TestCase
         yield 'engine unavailable as a 502' => [self::api(502, 'ENGINE_UNAVAILABLE'), true, RetrySchedule::COUNT];
         yield 'throttled' => [self::api(429, 'RATE_LIMITED'), true, RetrySchedule::COUNT];
         yield 'quota gone' => [self::api(429, 'QUOTA_EXCEEDED'), true, RetrySchedule::NONE];
+        yield 'extra-document ceiling reached' => [self::api(429, 'DOCUMENT_CEILING_REACHED'), true, RetrySchedule::NONE];
         yield 'the order data is wrong' => [self::api(422, 'INVALID_INVOICE'), true, RetrySchedule::NONE];
         yield 'no key' => [self::api(401, 'AUTHENTICATION_REQUIRED'), true, RetrySchedule::NONE];
         yield 'key revoked' => [self::api(403, 'INVALID_API_KEY'), true, RetrySchedule::NONE];

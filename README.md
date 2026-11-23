@@ -186,8 +186,8 @@ first attempt fails, the plugin records the failure on the order (Orders, the
 order's Details tab, Custom fields, "beliq e-invoice": when it failed, the beliq
 error code or the connection failure, and when the next attempt is due) and,
 for a failure a wait can help, tries again later. What is retried, and when
-(`src/Retry/RetrySchedule.php`), follows the beliq SDKs (`@beliq/sdk` 0.7.1,
-`beliq` 0.7.0) with two departures: the first attempt's own timeout is retried
+(`src/Retry/RetrySchedule.php`), follows the beliq SDKs (`@beliq/sdk` 0.7.4,
+`beliq` 0.7.2) with two departures: the first attempt's own timeout is retried
 as a request that may have run (the SDKs never retry their own timeout, but the
 order request's 30 s can be shorter than beliq's own deadlines), and a TLS
 failure is never retried (the Node SDK retries it by count):
@@ -198,8 +198,8 @@ failure is never retried (the Node SDK retries it by count):
   and a connection that could not be opened.
 - A failure that may have run at beliq is tried at most 3 times, and only within
   the first 15 minutes, however late the task runs: `ENGINE_UNAVAILABLE` or
-  another coded 502 or 503, a 429 other than `QUOTA_EXCEEDED`, a connection lost
-  after the request was sent, and the first attempt's own timeout. beliq does
+  another coded 502 or 503, a 429 other than `QUOTA_EXCEEDED` and
+  `DOCUMENT_CEILING_REACHED`, a connection lost after the request was sent, and the first attempt's own timeout. beliq does
   not charge a repeat of a request it charged in the last 15 minutes, with a key
   of the same mode, up to 10 repeats
   ([Repeated requests](https://docs.beliq.eu/api-reference/errors/#repeated-requests-are-not-charged-again));
@@ -215,8 +215,9 @@ failure is never retried (the Node SDK retries it by count):
 - A slot that passed while beliq asked for a longer wait, or while no task ran,
   is skipped rather than run straight after. A `Retry-After` that would push an
   attempt past the 60-minute slot ends the retries.
-- Nothing else is retried: a 4xx would send the same order data to the same
-  answer, and a TLS failure or a malformed base URL is not fixed by waiting. The
+- Nothing else is retried: a 429 `QUOTA_EXCEEDED` or `DOCUMENT_CEILING_REACHED`
+  lasts until the billing window turns or the account raises its cap or its
+  plan, a 4xx would send the same order data to the same answer, and a TLS failure or a malformed base URL is not fixed by waiting. The
   failure stays in the order's custom fields, and a beliq e-invoice can be
   created by hand from the order's Documents tab.
 
