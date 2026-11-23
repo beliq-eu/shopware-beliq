@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.11 (2026-11-23)
 
 - A 429 `DOCUMENT_CEILING_REACHED` is not tried again, the same as
   `QUOTA_EXCEEDED`. beliq answers it when an account with usage billing reaches
