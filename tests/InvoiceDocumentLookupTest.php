@@ -80,6 +80,20 @@ final class InvoiceDocumentLookupTest extends TestCase
         self::assertSame('SW-1-2', $this->nextNumber('SW-1', [], ['sw-1']));
     }
 
+    public function testAnIssuedNumberCountsAfterItsDocumentIsDeleted(): void
+    {
+        // Every beliq document on the order was deleted. The buyer may still hold
+        // 10000, so it is not issued again.
+        self::assertSame('10000-2', $this->nextNumber('10000', [], issued: ['10000']));
+        // 10000-2 was deleted, 10000 remains.
+        self::assertSame('10000-3', $this->nextNumber('10000', ['10000'], issued: ['10000', '10000-2']));
+    }
+
+    public function testAnIssuedNumberInNeitherFormDoesNotCount(): void
+    {
+        self::assertSame('10000', $this->nextNumber('10000', [], issued: ['1000-5', '10000-0']));
+    }
+
     public function testOnlyBeliqDocumentsCount(): void
     {
         // Shopware's own invoice can hold the same number: the duplicate check is
@@ -91,8 +105,9 @@ final class InvoiceDocumentLookupTest extends TestCase
      * @param list<string> $numbers beliq documents on the order
      * @param list<string> $otherOrders beliq documents on other orders
      * @param list<string> $otherTypes documents of another type on the order
+     * @param list<string> $issued numbers recorded on the order
      */
-    private function nextNumber(string $orderNumber, array $numbers, array $otherOrders = [], array $otherTypes = []): string
+    private function nextNumber(string $orderNumber, array $numbers, array $otherOrders = [], array $otherTypes = [], array $issued = []): string
     {
         $orderId = Uuid::randomHex();
         $documents = [];
@@ -124,7 +139,7 @@ final class InvoiceDocumentLookupTest extends TestCase
             },
         );
 
-        return (new InvoiceDocumentLookup($repository))->nextNumber($orderNumber, Context::createDefaultContext());
+        return (new InvoiceDocumentLookup($repository))->nextNumber($orderNumber, $issued, Context::createDefaultContext());
     }
 
     /**

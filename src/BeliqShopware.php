@@ -2,6 +2,7 @@
 
 namespace Beliq\Shopware;
 
+use Beliq\Shopware\Document\IssuedInvoiceNumbers;
 use Beliq\Shopware\Retry\OrderFailureFields;
 use Beliq\Shopware\Retry\RetryStore;
 use Doctrine\DBAL\Connection;
@@ -16,7 +17,7 @@ use Shopware\Core\Framework\Plugin\Context\UpdateContext;
  * subscriber and services) from Resources/config/services.xml and the merchant
  * settings from Resources/config/config.xml. The lifecycle adds the order's
  * custom field set for a failed automatic invoice, and an uninstall that does
- * not keep user data removes it and the retry table.
+ * not keep user data removes it, the retry table and the issued invoice numbers.
  */
 class BeliqShopware extends Plugin
 {
@@ -40,6 +41,7 @@ class BeliqShopware extends Plugin
         $connection = $this->container?->get(Connection::class);
         if ($connection instanceof Connection) {
             $connection->executeStatement('DROP TABLE IF EXISTS `' . RetryStore::TABLE . '`');
+            $connection->executeStatement('DROP TABLE IF EXISTS `' . IssuedInvoiceNumbers::TABLE . '`');
         }
     }
 
