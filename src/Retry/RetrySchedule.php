@@ -8,14 +8,15 @@ use Beliq\Shopware\Exception\BeliqTransportException;
 /**
  * Which failures of an automatic invoice are tried again later, and when.
  *
- * The classes follow the beliq SDKs (@beliq/sdk 0.7.1), with the two departures
+ * The classes follow the beliq SDKs (@beliq/sdk 0.7.4), with the two departures
  * named below. An outage a wait can outlast (a 503
  * DATABASE_UNAVAILABLE, a 502 or 503 with no beliq error code, a connection that
  * could not be opened) is tried at every slot of the window. A failure that may
  * have run on beliq's side (ENGINE_UNAVAILABLE and any other coded 502 or 503, a
- * 429 other than QUOTA_EXCEEDED, a connection lost after the send) is tried at
- * most COUNT_CLASS_RETRIES times, all inside the first COUNT_CLASS_WINDOW_SECONDS,
- * because beliq does not charge a repeat of the same request inside 15 minutes.
+ * 429 other than QUOTA_EXCEEDED and DOCUMENT_CEILING_REACHED, a connection lost
+ * after the send) is tried at most COUNT_CLASS_RETRIES times, all inside the
+ * first COUNT_CLASS_WINDOW_SECONDS, because beliq does not charge a repeat of the
+ * same request inside 15 minutes.
  * Everything else would send the same body to the same answer again, so it is
  * never retried. The two departures from the SDKs: the order request's own
  * timeout is shorter than beliq's deadlines, so it counts as a failure of the count
@@ -62,7 +63,9 @@ final class RetrySchedule
     public const ATTEMPT_LEASE_SECONDS = 300;
 
     // beliq error codes, as the API's error list names them (openapi.json).
-    private const QUOTA_EXHAUSTED_CODE = 'QUOTA_EXCEEDED';
+    // The 429s no wait clears before the billing window turns: the monthly quota, and
+    // the extra-document ceiling above it. Their Retry-After can be weeks.
+    private const QUOTA_EXHAUSTED_CODES = ['QUOTA_EXCEEDED', 'DOCUMENT_CEILING_REACHED'];
     private const DATABASE_UNAVAILABLE_CODE = 'DATABASE_UNAVAILABLE';
 
     /**
@@ -186,7 +189,7 @@ final class RetrySchedule
     private static function classifyStatus(int $status, string $code): string
     {
         if ($status === 429) {
-            return $code === self::QUOTA_EXHAUSTED_CODE ? self::NONE : self::COUNT;
+            return in_array($code, self::QUOTA_EXHAUSTED_CODES, true) ? self::NONE : self::COUNT;
         }
         if ($status !== 502 && $status !== 503) {
             return self::NONE;

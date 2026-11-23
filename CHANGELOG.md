@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- A 429 `DOCUMENT_CEILING_REACHED` is not tried again, the same as
+  `QUOTA_EXCEEDED`. beliq answers it when an account with usage billing reaches
+  its extra-document cap or the ceiling above it, and its `Retry-After` runs to
+  the end of the billing window. Up to 0.2.10 it was retried as a failure that
+  may have run, which in practice meant one retry only when the window turned
+  within the first 15 minutes; any other time the first failure was already
+  final. Now it is final every time, also just before the window turns: create
+  the beliq e-invoice by hand from the order's Documents tab once the window has
+  turned or the cap is raised. The beliq SDKs treat it the same way since
+  `@beliq/sdk` 0.7.4 and `beliq` 0.7.2.
+
 ## 0.2.10 (2026-11-22)
 
 - A beliq document created again by hand is a new invoice, and its invoice
