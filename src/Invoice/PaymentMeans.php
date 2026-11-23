@@ -27,7 +27,9 @@ final readonly class PaymentMeans
         return new self($this->typeCode, $this->iban, $this->bic, $this->bankName, $paymentReference);
     }
 
-    /** @return array<string, string> */
+    /**
+     * @return array<string, string>
+     */
     public function toArray(): array
     {
         return array_filter([

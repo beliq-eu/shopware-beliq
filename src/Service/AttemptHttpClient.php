@@ -23,7 +23,9 @@ final class AttemptHttpClient implements HttpClient
 
     /**
      * @template T
+     *
      * @param callable(): T $attempt
+     *
      * @return T
      */
     public function runAsLaterAttempt(callable $attempt): mixed

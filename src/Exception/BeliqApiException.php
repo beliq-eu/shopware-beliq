@@ -2,7 +2,9 @@
 
 namespace Beliq\Shopware\Exception;
 
-/** Raised when the beliq API returns a non-2xx response. */
+/**
+ * Raised when the beliq API returns a non-2xx response.
+ */
 final class BeliqApiException extends \RuntimeException
 {
     /**

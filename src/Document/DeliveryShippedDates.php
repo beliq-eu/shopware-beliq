@@ -31,6 +31,7 @@ final class DeliveryShippedDates
 
     /**
      * @param list<string> $deliveryIds
+     *
      * @return array<string, list<string>> per delivery id, the Y-m-d dates it was set to shipped
      */
     public function forDeliveries(array $deliveryIds, Context $context): array

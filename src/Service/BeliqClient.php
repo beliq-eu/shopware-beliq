@@ -37,6 +37,7 @@ final class BeliqClient
      * POST /v1/generate. Returns the produced document.
      *
      * @param array<string, mixed> $body
+     *
      * @return array{contentType: string, bytes: string, meta: array<string, string>}
      */
     public function generate(array $body): array
@@ -90,6 +91,7 @@ final class BeliqClient
 
     /**
      * @param array<string, string> $extra
+     *
      * @return array<string, string>
      */
     private function authHeaders(array $extra = []): array
@@ -99,6 +101,7 @@ final class BeliqClient
 
     /**
      * @param array{status: int, body: string, headers: array<string, string>} $res
+     *
      * @return array<string, mixed>
      */
     private function decodeJson(array $res, string $operation): array

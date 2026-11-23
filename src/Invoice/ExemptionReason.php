@@ -15,7 +15,9 @@ final readonly class ExemptionReason
     ) {
     }
 
-    /** @return array<string, string> the taxSummary fields of the generate body */
+    /**
+     * @return array<string, string> the taxSummary fields of the generate body
+     */
     public function toArray(): array
     {
         return array_filter([

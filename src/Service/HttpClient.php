@@ -12,6 +12,7 @@ interface HttpClient
     /**
      * @param non-empty-string $method
      * @param array<string, string> $headers
+     *
      * @return array{status: int, body: string, headers: array<string, string>}
      */
     public function request(string $method, string $url, array $headers = [], ?string $body = null): array;

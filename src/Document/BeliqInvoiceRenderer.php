@@ -34,7 +34,9 @@ use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
  */
 final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
 {
-    /** Technical name of the beliq document type (see the registering migration). */
+    /**
+     * Technical name of the beliq document type (see the registering migration).
+     */
     public const TYPE = 'beliq_invoice';
 
     public const PREVIEW_NAME = 'beliq-invoice-preview.txt';
@@ -154,6 +156,11 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         return $result;
     }
 
+    public function getDecorated(): AbstractDocumentRenderer
+    {
+        throw new DecorationPatternException(self::class);
+    }
+
     /**
      * A document created again is a new invoice, not a copy: the order can change
      * between two creates. So the invoice number (BT-1) is the document's own
@@ -173,11 +180,6 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         $body['invoice']['number'] = $number;
 
         return $body;
-    }
-
-    public function getDecorated(): AbstractDocumentRenderer
-    {
-        throw new DecorationPatternException(self::class);
     }
 
     /**

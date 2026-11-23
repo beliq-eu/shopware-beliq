@@ -18,7 +18,9 @@ final readonly class Address
     ) {
     }
 
-    /** @return array<string, string> */
+    /**
+     * @return array<string, string>
+     */
     public function toArray(): array
     {
         return array_filter([

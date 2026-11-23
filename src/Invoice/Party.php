@@ -2,7 +2,9 @@
 
 namespace Beliq\Shopware\Invoice;
 
-/** A seller or buyer. name and address are required; identifiers are optional. */
+/**
+ * A seller or buyer. name and address are required; identifiers are optional.
+ */
 final readonly class Party
 {
     public function __construct(
@@ -17,7 +19,9 @@ final readonly class Party
     ) {
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return array_filter([
