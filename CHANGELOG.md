@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.10 (2026-11-22)
 
 - A beliq document created again by hand is a new invoice, and its invoice
   number (BT-1) is now its document number, `<order number>-<n>`. Up to 0.2.9
