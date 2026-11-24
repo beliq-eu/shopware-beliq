@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/symfony/dependency-injection/7.4/Loader/schema/services.schema.json
+services:
+    Beliq\Shopware\Service\InvoiceMapper: ~
+
+    Beliq\Shopware\Service\OrderAdapter: ~
+
+    Beliq\Shopware\Service\AttemptHttpClient: ~
+
+    Beliq\Shopware\Service\HttpClient: '@Beliq\Shopware\Service\AttemptHttpClient'
+
+    Beliq\Shopware\Config\PluginConfigProvider:
+        arguments:
+            - '@Shopware\Core\System\SystemConfig\SystemConfigService'
+
+    Beliq\Shopware\Document\InvoiceDocumentLookup:
+        arguments:
+            - '@document.repository'
+
+    Beliq\Shopware\Document\DeliveryShippedDates:
+        arguments:
+            - '@state_machine_history.repository'
+
+    Beliq\Shopware\Document\IssuedInvoiceNumbers:
+        arguments:
+            - '@Doctrine\DBAL\Connection'
+
+    Beliq\Shopware\Document\BeliqInvoiceRenderer:
+        arguments:
+            - '@order.repository'
+            - '@Beliq\Shopware\Config\PluginConfigProvider'
+            - '@Beliq\Shopware\Service\OrderAdapter'
+            - '@Beliq\Shopware\Service\InvoiceMapper'
+            - '@Beliq\Shopware\Document\InvoiceDocumentLookup'
+            - '@Beliq\Shopware\Document\DeliveryShippedDates'
+            - '@Beliq\Shopware\Document\IssuedInvoiceNumbers'
+            - '@lock.factory'
+            - '@logger'
+            - '@Beliq\Shopware\Service\HttpClient'
+        tags:
+            - document.renderer
+
+    Beliq\Shopware\Retry\RetryStore:
+        arguments:
+            - '@Doctrine\DBAL\Connection'
+
+    Beliq\Shopware\Retry\DocumentInvoiceGeneration:
+        arguments:
+            - '@Beliq\Shopware\Config\PluginConfigProvider'
+            - '@Shopware\Core\Checkout\Document\Service\DocumentGenerator'
+            - '@Beliq\Shopware\Document\InvoiceDocumentLookup'
+            - '@Beliq\Shopware\Service\AttemptHttpClient'
+
+    Beliq\Shopware\Retry\OrderCustomFieldRecorder:
+        arguments:
+            - '@order.repository'
+
+    Beliq\Shopware\Retry\InvoiceAttempts:
+        arguments:
+            - '@Beliq\Shopware\Retry\RetryStore'
+            - '@Beliq\Shopware\Retry\DocumentInvoiceGeneration'
+            - '@Beliq\Shopware\Retry\OrderCustomFieldRecorder'
+            - '@logger'
+            - '@Psr\Clock\ClockInterface'
+
+    Beliq\Shopware\Retry\InvoiceRetryTask:
+        tags:
+            - shopware.scheduled.task
+
+    Beliq\Shopware\Retry\InvoiceRetryTaskHandler:
+        arguments:
+            - '@scheduled_task.repository'
+            - '@logger'
+            - '@Beliq\Shopware\Retry\InvoiceAttempts'
+        tags:
+            - messenger.message_handler
+
+    Beliq\Shopware\Subscriber\OrderStateSubscriber:
+        arguments:
+            - '@Beliq\Shopware\Config\PluginConfigProvider'
+            - '@Beliq\Shopware\Document\InvoiceDocumentLookup'
+            - '@Beliq\Shopware\Retry\InvoiceAttempts'
+            - '@logger'
+        tags:
+            - kernel.event_subscriber

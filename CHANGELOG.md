@@ -15,6 +15,11 @@
   pick the same number, and the second failed with "Document number already
   exists" after its generate call had counted toward the beliq plan. The number
   is now picked under a per-order lock from Shopware's lock store (`LOCK_DSN`).
+- The plugin's services are defined in `Resources/config/services.yaml`; the
+  services and their wiring are unchanged. Shopware deprecates a plugin's
+  `services.xml` from 6.7.14.0: up to 0.2.11 the plugin caused that deprecation
+  notice, and with Shopware's `v6.8.0.0` feature flag turned on, Shopware
+  refused the file with an error while building its service container.
 
 ## 0.2.11 (2026-11-23)
 

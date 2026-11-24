@@ -14,7 +14,7 @@ use Shopware\Core\Framework\Plugin\Context\UpdateContext;
 
 /**
  * Plugin base class. Shopware loads the runtime wiring (the order-state
- * subscriber and services) from Resources/config/services.xml and the merchant
+ * subscriber and services) from Resources/config/services.yaml and the merchant
  * settings from Resources/config/config.xml. The lifecycle adds the order's
  * custom field set for a failed automatic invoice, and an uninstall that does
  * not keep user data removes it, the retry table and the issued invoice numbers.
