@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.12 (2026-11-24)
 
 - A beliq document no longer takes a number issued before on its order. Up to
   0.2.11, after every beliq document of an order was deleted, the next one took
