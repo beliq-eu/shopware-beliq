@@ -19,7 +19,9 @@
   services and their wiring are unchanged. Shopware deprecates a plugin's
   `services.xml` from 6.7.14.0: up to 0.2.11 the plugin caused that deprecation
   notice, and with Shopware's `v6.8.0.0` feature flag turned on, Shopware
-  refused the file with an error while building its service container.
+  refused the file with an error while building its service container. If you
+  update by copying the new files over the old plugin folder, delete
+  `src/Resources/config/services.xml` there: Shopware loads both files.
 
 ## 0.2.11 (2026-11-23)
 
