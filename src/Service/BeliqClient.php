@@ -11,6 +11,9 @@ use Beliq\Shopware\Exception\BeliqApiException;
  */
 final class BeliqClient
 {
+    /** Enough significant digits to read back any double (IEEE 754-2019, section 5.12.2). */
+    private const DOUBLE_DIGITS = 17;
+
     private readonly string $baseUrl;
 
     public function __construct(
@@ -57,7 +60,7 @@ final class BeliqClient
                 'Accept' => $documentMediaType,
                 'Content-Type' => 'application/json',
             ],
-            self::encodeBody($body),
+            self::encodeJson($body),
         );
         $this->throwIfError($res, 'generate');
 
@@ -90,22 +93,46 @@ final class BeliqClient
     }
 
     /**
-     * The request body with each float written as the shortest decimal that
-     * reads back as the same double, whatever the host's `serialize_precision`.
-     * At 17, json_encode writes 19.99 as 19.989999999999998.
-     *
-     * @param array<string, mixed> $body
+     * JSON with each float written as the shortest decimal that reads back as
+     * the same double. json_encode writes a float at the host's
+     * `serialize_precision`, and at 17 it writes 19.99 as 19.989999999999998.
      */
-    private static function encodeBody(array $body): string
+    private static function encodeJson(mixed $value): string
     {
-        $previous = ini_set('serialize_precision', '-1');
-        try {
-            return json_encode($body, JSON_THROW_ON_ERROR);
-        } finally {
-            if ($previous !== false) {
-                ini_set('serialize_precision', $previous);
+        if (is_float($value)) {
+            return self::shortestDecimal($value);
+        }
+        if (!is_array($value)) {
+            return json_encode($value, JSON_THROW_ON_ERROR);
+        }
+        if (array_is_list($value)) {
+            return '[' . implode(',', array_map(self::encodeJson(...), $value)) . ']';
+        }
+        $members = [];
+        foreach ($value as $key => $member) {
+            $members[] = json_encode((string) $key, JSON_THROW_ON_ERROR) . ':' . self::encodeJson($member);
+        }
+
+        return '{' . implode(',', $members) . '}';
+    }
+
+    /**
+     * sprintf's `%h` is the general format with `.` as the decimal point in
+     * every locale.
+     */
+    private static function shortestDecimal(float $value): string
+    {
+        if (!is_finite($value)) {
+            return json_encode($value, JSON_THROW_ON_ERROR);
+        }
+        for ($digits = 1; $digits < self::DOUBLE_DIGITS; $digits++) {
+            $text = sprintf('%.' . $digits . 'h', $value);
+            if ((float) $text === $value) {
+                return $text;
             }
         }
+
+        return sprintf('%.' . self::DOUBLE_DIGITS . 'h', $value);
     }
 
     /**

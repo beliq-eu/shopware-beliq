@@ -5,8 +5,8 @@
 - Each amount the plugin sends to beliq is written as its shortest decimal
   (19.99 as 19.99), whatever the host's `serialize_precision`. Up to 0.2.12, on
   a host with `serialize_precision` set to 17, PHP's `json_encode` wrote 19.99
-  into the request as 19.989999999999998. The plugin sets `serialize_precision` to -1 while it
-  encodes the request body and gives the host its own value back after.
+  into the request as 19.989999999999998. The plugin writes each float itself
+  and leaves `serialize_precision` as the host set it.
 
 ## 0.2.12 (2026-11-24)
 

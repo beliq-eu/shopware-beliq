@@ -261,4 +261,68 @@ final class BeliqClientTest extends TestCase
             ini_set('serialize_precision', $previous === false ? '-1' : $previous);
         }
     }
+
+    /**
+     * Below 1e15, where json_encode at `serialize_precision` -1 writes no
+     * exponent, the body is the text it writes: keys, strings, lists and
+     * amounts alike.
+     */
+    public function testGenerateWritesTheBodyJsonEncodeWritesAtShortestPrecision(): void
+    {
+        mt_srand(4931);
+        $amounts = [];
+        for ($i = 0; $i < 2000; $i++) {
+            $amounts[] = mt_rand(-99999999999, 99999999999) / 100;
+        }
+        $body = [
+            'standard' => 'xrechnung',
+            'output' => 'xml',
+            'invoice' => [
+                'seller' => ['name' => "M\u{00FC}ller & S\u{00F6}hne / \"GmbH\"", 'vatId' => null],
+                'lines' => [['quantity' => 3, 'unitPrice' => 0.1, 'taxRate' => 19.0, 'note' => '']],
+                'tiny' => [1.0e-7, 5.0e-324, -0.0],
+                'flags' => [true, false],
+                'empty' => [],
+                'amounts' => $amounts,
+            ],
+        ];
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
+
+        (new BeliqClient('key-123', 'https://api.beliq.eu', $http))->generate($body);
+
+        $previous = ini_set('serialize_precision', '-1');
+        try {
+            $expected = json_encode($body, JSON_THROW_ON_ERROR);
+        } finally {
+            ini_set('serialize_precision', $previous === false ? '-1' : $previous);
+        }
+        self::assertSame($expected, $http->lastCall()['body']);
+    }
+
+    /** Every finite double, at any magnitude, reads back from the body as the same double. */
+    public function testGenerateWritesEveryFloatSoItReadsBackUnchanged(): void
+    {
+        mt_srand(5813);
+        $values = [];
+        while (count($values) < 20000) {
+            $value = unpack('E', pack('J', (mt_rand() << 32) ^ mt_rand()))[1];
+            if (is_finite($value)) {
+                $values[] = $value;
+            }
+        }
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
+
+        (new BeliqClient('key-123', 'https://api.beliq.eu', $http))->generate(['invoice' => ['values' => $values]]);
+
+        $sent = json_decode((string) $http->lastCall()['body'], true, 512, JSON_THROW_ON_ERROR)['invoice']['values'];
+        self::assertSame($values, array_map(floatval(...), $sent));
+    }
+
+    public function testGenerateRefusesAnInfiniteAmountAsJsonEncodeDoes(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
+
+        $this->expectException(\JsonException::class);
+        (new BeliqClient('key-123', 'https://api.beliq.eu', $http))->generate(['invoice' => ['lines' => [['unitPrice' => INF]]]]);
+    }
 }
