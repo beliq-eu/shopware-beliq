@@ -236,4 +236,29 @@ final class BeliqClientTest extends TestCase
 
         self::assertSame('https://api.beliq.eu/v1/me', $http->lastCall()['url']);
     }
+
+    /**
+     * A host may run with `serialize_precision` 17, at which json_encode writes
+     * 19.99 as 19.989999999999998. The body carries 19.99 as written, and the
+     * host's setting is left as it was.
+     */
+    public function testGenerateWritesAnAmountAsItsShortestDecimalWhateverTheHostPrecision(): void
+    {
+        $previous = ini_set('serialize_precision', '17');
+        try {
+            $http = new FakeHttpClient([
+                'status' => 200,
+                'body' => '<Invoice/>',
+                'headers' => ['content-type' => 'application/xml'],
+            ]);
+            $client = new BeliqClient('key-123', 'https://api.beliq.eu', $http);
+
+            $client->generate(['standard' => 'xrechnung', 'output' => 'xml', 'invoice' => ['lines' => [['unitPrice' => 19.99]]]]);
+
+            self::assertStringContainsString('"unitPrice":19.99}', (string) $http->lastCall()['body']);
+            self::assertSame('17', ini_get('serialize_precision'));
+        } finally {
+            ini_set('serialize_precision', $previous === false ? '-1' : $previous);
+        }
+    }
 }

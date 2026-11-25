@@ -57,7 +57,7 @@ final class BeliqClient
                 'Accept' => $documentMediaType,
                 'Content-Type' => 'application/json',
             ],
-            json_encode($body, JSON_THROW_ON_ERROR),
+            self::encodeBody($body),
         );
         $this->throwIfError($res, 'generate');
 
@@ -87,6 +87,25 @@ final class BeliqClient
         );
 
         return $this->decodeJson($res, 'validate');
+    }
+
+    /**
+     * The request body with each float written as the shortest decimal that
+     * reads back as the same double, whatever the host's `serialize_precision`.
+     * At 17, json_encode writes 19.99 as 19.989999999999998.
+     *
+     * @param array<string, mixed> $body
+     */
+    private static function encodeBody(array $body): string
+    {
+        $previous = ini_set('serialize_precision', '-1');
+        try {
+            return json_encode($body, JSON_THROW_ON_ERROR);
+        } finally {
+            if ($previous !== false) {
+                ini_set('serialize_precision', $previous);
+            }
+        }
     }
 
     /**
