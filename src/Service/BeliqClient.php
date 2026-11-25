@@ -11,6 +11,13 @@ use Beliq\Shopware\Exception\BeliqApiException;
  */
 final class BeliqClient
 {
+    /**
+     * The decimal exponents json_encode writes a float at without an exponent
+     * part, from 0.0001 up to below 1.0e+17.
+     */
+    private const POSITIONAL_EXPONENT_MIN = -4;
+    private const POSITIONAL_EXPONENT_MAX = 16;
+
     private readonly string $baseUrl;
 
     public function __construct(
@@ -57,7 +64,7 @@ final class BeliqClient
                 'Accept' => $documentMediaType,
                 'Content-Type' => 'application/json',
             ],
-            json_encode($body, JSON_THROW_ON_ERROR),
+            self::encodeJson($body),
         );
         $this->throwIfError($res, 'generate');
 
@@ -87,6 +94,78 @@ final class BeliqClient
         );
 
         return $this->decodeJson($res, 'validate');
+    }
+
+    /**
+     * JSON with each float written as the shortest decimal that reads back as
+     * the same double. json_encode writes a float at the host's
+     * `serialize_precision`, and at 17 it writes 19.99 as 19.989999999999998.
+     */
+    private static function encodeJson(mixed $value): string
+    {
+        if (is_float($value)) {
+            return self::shortestDecimal($value);
+        }
+        if (!is_array($value)) {
+            return json_encode($value, JSON_THROW_ON_ERROR);
+        }
+        if (array_is_list($value)) {
+            return '[' . implode(',', array_map(self::encodeJson(...), $value)) . ']';
+        }
+        $members = [];
+        foreach ($value as $key => $member) {
+            $members[] = json_encode((string) $key, JSON_THROW_ON_ERROR) . ':' . self::encodeJson($member);
+        }
+
+        return '{' . implode(',', $members) . '}';
+    }
+
+    /**
+     * The shortest decimal that reads back as the same double, laid out as
+     * json_encode lays it out at `serialize_precision` -1. json_encode writes
+     * zero, and refuses INF and NaN, alike at any precision. sprintf's `%e`
+     * uses `.` as the decimal point in every locale.
+     */
+    private static function shortestDecimal(float $value): string
+    {
+        if ($value === 0.0 || !is_finite($value)) {
+            return json_encode($value, JSON_THROW_ON_ERROR);
+        }
+        $magnitude = abs($value);
+        $digits = 0;
+        while (true) {
+            ++$digits;
+            [$mantissa, $exponent] = explode('e', sprintf('%.' . ($digits - 1) . 'e', $magnitude));
+            $nearest = str_replace('.', '', $mantissa);
+            $scale = (int) $exponent - $digits + 1;
+            // Next to a power of two the next double down is half as far as the
+            // next one up, so the decimal one step up can read back where the
+            // nearest one, below, does not. 17 digits always read back
+            // (IEEE 754-2019, section 5.12.2), which ends the loop.
+            foreach ([$nearest, (string) ((int) $nearest + 1)] as $candidate) {
+                if ((float) ($candidate . 'e' . $scale) === $magnitude) {
+                    return ($value < 0 ? '-' : '') . self::layOut($candidate, $scale + strlen($candidate) - 1);
+                }
+            }
+        }
+    }
+
+    /**
+     * `$digits` with the decimal point after its first digit, times ten to the
+     * `$exponent`, written as json_encode writes a float.
+     */
+    private static function layOut(string $digits, int $exponent): string
+    {
+        if ($exponent < self::POSITIONAL_EXPONENT_MIN || $exponent > self::POSITIONAL_EXPONENT_MAX) {
+            return $digits[0] . '.' . (substr($digits, 1) ?: '0') . sprintf('e%+d', $exponent);
+        }
+        if ($exponent < 0) {
+            return '0.' . str_repeat('0', -$exponent - 1) . $digits;
+        }
+        $whole = str_pad(substr($digits, 0, $exponent + 1), $exponent + 1, '0');
+        $fraction = substr($digits, $exponent + 1);
+
+        return $fraction === '' ? $whole : $whole . '.' . $fraction;
     }
 
     /**

@@ -236,4 +236,118 @@ final class BeliqClientTest extends TestCase
 
         self::assertSame('https://api.beliq.eu/v1/me', $http->lastCall()['url']);
     }
+
+    /**
+     * A host may run with `serialize_precision` 17, at which json_encode writes
+     * 19.99 as 19.989999999999998. The body carries 19.99 as written, and the
+     * host's setting is left as it was.
+     */
+    public function testGenerateWritesAnAmountAsItsShortestDecimalWhateverTheHostPrecision(): void
+    {
+        $previous = ini_set('serialize_precision', '17');
+        try {
+            $http = new FakeHttpClient([
+                'status' => 200,
+                'body' => '<Invoice/>',
+                'headers' => ['content-type' => 'application/xml'],
+            ]);
+            $client = new BeliqClient('key-123', 'https://api.beliq.eu', $http);
+
+            $client->generate(['standard' => 'xrechnung', 'output' => 'xml', 'invoice' => ['lines' => [['unitPrice' => 19.99]]]]);
+
+            self::assertStringContainsString('"unitPrice":19.99}', (string) $http->lastCall()['body']);
+            self::assertSame('17', ini_get('serialize_precision'));
+        } finally {
+            ini_set('serialize_precision', $previous === false ? '-1' : $previous);
+        }
+    }
+
+    /**
+     * The body is the text json_encode writes at `serialize_precision` -1:
+     * keys, strings, lists and floats alike. The floats include whole numbers,
+     * every power of two (where the shortest decimal is not always the nearest
+     * one), both ends of the range json_encode writes without an exponent, and
+     * random doubles at every magnitude.
+     */
+    public function testGenerateWritesTheBodyJsonEncodeWritesAtShortestPrecision(): void
+    {
+        mt_srand(4931);
+        $amounts = [];
+        for ($i = 0; $i < 2000; $i++) {
+            $amounts[] = mt_rand(-99999999999, 99999999999) / 100;
+            $amounts[] = (float) mt_rand(1, 100000) * 10;
+        }
+        $powers = [];
+        for ($exponent = -1074; $exponent <= 1023; $exponent++) {
+            $powers[] = 2.0 ** $exponent;
+        }
+        for ($exponent = -323; $exponent <= 308; $exponent++) {
+            $powers[] = (float) ('1e' . $exponent);
+        }
+        $body = [
+            'standard' => 'xrechnung',
+            'output' => 'xml',
+            'invoice' => [
+                'seller' => ['name' => "M\u{00FC}ller & S\u{00F6}hne / \"GmbH\"", 'vatId' => null],
+                'lines' => [['quantity' => 3, 'unitPrice' => 0.1, 'taxRate' => 19.0, 'note' => '']],
+                'whole' => [20.0, 100.0, 1500.0, 1.0e16, 99999999999999984.0, 1.0e17],
+                'edges' => [1.0e-4, 9.9e-5, 1.0e-5, 5.0e-324, -0.0],
+                'flags' => [true, false],
+                'empty' => [],
+                'amounts' => $amounts,
+                'powers' => $powers,
+                'random' => self::randomDoubles(4931, 20000),
+            ],
+        ];
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
+
+        (new BeliqClient('key-123', 'https://api.beliq.eu', $http))->generate($body);
+
+        $previous = ini_set('serialize_precision', '-1');
+        try {
+            $expected = json_encode($body, JSON_THROW_ON_ERROR);
+        } finally {
+            ini_set('serialize_precision', $previous === false ? '-1' : $previous);
+        }
+        self::assertSame($expected, $http->lastCall()['body']);
+    }
+
+    /** Every finite double, at any magnitude and either sign, reads back from the body as the same double. */
+    public function testGenerateWritesEveryFloatSoItReadsBackUnchanged(): void
+    {
+        $values = self::randomDoubles(5813, 20000);
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
+
+        (new BeliqClient('key-123', 'https://api.beliq.eu', $http))->generate(['invoice' => ['values' => $values]]);
+
+        $sent = json_decode((string) $http->lastCall()['body'], true, 512, JSON_THROW_ON_ERROR)['invoice']['values'];
+        self::assertSame($values, array_map(floatval(...), $sent));
+    }
+
+    public function testGenerateRefusesAnInfiniteAmountAsJsonEncodeDoes(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<Invoice/>', 'headers' => ['content-type' => 'application/xml']]);
+
+        $this->expectException(\JsonException::class);
+        (new BeliqClient('key-123', 'https://api.beliq.eu', $http))->generate(['invoice' => ['lines' => [['unitPrice' => INF]]]]);
+    }
+
+    /**
+     * Finite doubles from random bit patterns, all 64 bits drawn.
+     *
+     * @return list<float>
+     */
+    private static function randomDoubles(int $seed, int $count): array
+    {
+        mt_srand($seed);
+        $values = [];
+        while (count($values) < $count) {
+            $value = unpack('E', pack('J', (mt_rand() << 33) ^ (mt_rand() << 2) ^ mt_rand(0, 3)))[1];
+            if (is_finite($value)) {
+                $values[] = $value;
+            }
+        }
+
+        return $values;
+    }
 }
