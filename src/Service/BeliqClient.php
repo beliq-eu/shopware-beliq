@@ -12,9 +12,11 @@ use Beliq\Shopware\Exception\BeliqApiException;
 final class BeliqClient
 {
     /**
-     * Enough significant digits to read back any double (IEEE 754-2019, section 5.12.2).
+     * The decimal exponents json_encode writes a float at without an exponent
+     * part, from 0.0001 up to below 1.0e+17.
      */
-    private const DOUBLE_DIGITS = 17;
+    private const POSITIONAL_EXPONENT_MIN = -4;
+    private const POSITIONAL_EXPONENT_MAX = 16;
 
     private readonly string $baseUrl;
 
@@ -119,22 +121,51 @@ final class BeliqClient
     }
 
     /**
-     * sprintf's `%h` is the general format with `.` as the decimal point in
-     * every locale.
+     * The shortest decimal that reads back as the same double, laid out as
+     * json_encode lays it out at `serialize_precision` -1. json_encode writes
+     * zero, and refuses INF and NaN, alike at any precision. sprintf's `%e`
+     * uses `.` as the decimal point in every locale.
      */
     private static function shortestDecimal(float $value): string
     {
-        if (!is_finite($value)) {
+        if ($value === 0.0 || !is_finite($value)) {
             return json_encode($value, JSON_THROW_ON_ERROR);
         }
-        for ($digits = 1; $digits < self::DOUBLE_DIGITS; ++$digits) {
-            $text = sprintf('%.' . $digits . 'h', $value);
-            if ((float) $text === $value) {
-                return $text;
+        $magnitude = abs($value);
+        $digits = 0;
+        while (true) {
+            ++$digits;
+            [$mantissa, $exponent] = explode('e', sprintf('%.' . ($digits - 1) . 'e', $magnitude));
+            $nearest = str_replace('.', '', $mantissa);
+            $scale = (int) $exponent - $digits + 1;
+            // Next to a power of two the next double down is half as far as the
+            // next one up, so the decimal one step up can read back where the
+            // nearest one, below, does not. 17 digits always read back
+            // (IEEE 754-2019, section 5.12.2), which ends the loop.
+            foreach ([$nearest, (string) ((int) $nearest + 1)] as $candidate) {
+                if ((float) ($candidate . 'e' . $scale) === $magnitude) {
+                    return ($value < 0 ? '-' : '') . self::layOut($candidate, $scale + strlen($candidate) - 1);
+                }
             }
         }
+    }
 
-        return sprintf('%.' . self::DOUBLE_DIGITS . 'h', $value);
+    /**
+     * `$digits` with the decimal point after its first digit, times ten to the
+     * `$exponent`, written as json_encode writes a float.
+     */
+    private static function layOut(string $digits, int $exponent): string
+    {
+        if ($exponent < self::POSITIONAL_EXPONENT_MIN || $exponent > self::POSITIONAL_EXPONENT_MAX) {
+            return $digits[0] . '.' . (substr($digits, 1) ?: '0') . sprintf('e%+d', $exponent);
+        }
+        if ($exponent < 0) {
+            return '0.' . str_repeat('0', -$exponent - 1) . $digits;
+        }
+        $whole = str_pad(substr($digits, 0, $exponent + 1), $exponent + 1, '0');
+        $fraction = substr($digits, $exponent + 1);
+
+        return $fraction === '' ? $whole : $whole . '.' . $fraction;
     }
 
     /**
