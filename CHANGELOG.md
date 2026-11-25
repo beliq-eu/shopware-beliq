@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.13 (2026-11-25)
 
 - Each amount the plugin sends to beliq is written as its shortest decimal
   (19.99 as 19.99), whatever the host's `serialize_precision`. Up to 0.2.12, on
