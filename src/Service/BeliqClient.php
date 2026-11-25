@@ -11,7 +11,9 @@ use Beliq\Shopware\Exception\BeliqApiException;
  */
 final class BeliqClient
 {
-    /** Enough significant digits to read back any double (IEEE 754-2019, section 5.12.2). */
+    /**
+     * Enough significant digits to read back any double (IEEE 754-2019, section 5.12.2).
+     */
     private const DOUBLE_DIGITS = 17;
 
     private readonly string $baseUrl;
@@ -125,7 +127,7 @@ final class BeliqClient
         if (!is_finite($value)) {
             return json_encode($value, JSON_THROW_ON_ERROR);
         }
-        for ($digits = 1; $digits < self::DOUBLE_DIGITS; $digits++) {
+        for ($digits = 1; $digits < self::DOUBLE_DIGITS; ++$digits) {
             $text = sprintf('%.' . $digits . 'h', $value);
             if ((float) $text === $value) {
                 return $text;
