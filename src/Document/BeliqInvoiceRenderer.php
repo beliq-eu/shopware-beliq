@@ -8,11 +8,13 @@ use Beliq\Shopware\Service\CurlHttpClient;
 use Beliq\Shopware\Service\HttpClient;
 use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
+use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Document\Renderer\AbstractDocumentRenderer;
 use Shopware\Core\Checkout\Document\Renderer\DocumentRendererConfig;
 use Shopware\Core\Checkout\Document\Renderer\RenderedDocument;
 use Shopware\Core\Checkout\Document\Renderer\RendererResult;
+use Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation;
 use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Framework\Context;
@@ -48,6 +50,12 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
      */
     public const NUMBER_LOCK = 'beliq-invoice-number-';
 
+    /**
+     * The key in a beliq document's config that holds its issue date (BT-2), so a
+     * later document can name it as the preceding invoice's date (BT-26).
+     */
+    public const ISSUE_DATE_CONFIG = 'beliqIssueDate';
+
     public const PREVIEW_NOTICE = "beliq invoice: no preview\n\n"
         . "The plugin does not generate a preview: each document beliq generates counts\n"
         . "toward the documents per month of your beliq plan. Create the document to see it.\n\n"
@@ -76,6 +84,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
         private readonly IssuedInvoiceNumbers $issuedNumbers,
         private readonly LockFactory $locks,
         private readonly LoggerInterface $logger,
+        private readonly ClockInterface $clock,
         private readonly HttpClient $http = new CurlHttpClient(),
     ) {
     }
@@ -129,6 +138,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     $config->effectiveOutput(),
                     $config->effectiveProfile(),
                 );
+                $issueDate = $this->issueDate($operation);
 
                 // The admin's create-document dialog asks for a preview before the
                 // merchant creates the document. A beliq generate counts toward the
@@ -162,9 +172,15 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                 try {
                     $issued = $this->issuedNumbers->inOrderNumberForm($source->number);
                     $documentNumber = $this->documents->nextNumber($source->number, $issued, $context);
+                    $preceding = $this->documents->precedingInvoice(
+                        $order->getId(),
+                        $source->number,
+                        $this->issuedNumbers->ofOrder($order->getId(), $source->number),
+                        $context,
+                    );
 
                     $client = new BeliqClient($config->apiKey, $config->baseUrl, $this->http);
-                    $generated = $client->generate(self::withInvoiceNumber($body, $documentNumber));
+                    $generated = $client->generate(self::withDocumentFields($body, $documentNumber, $issueDate, $preceding));
 
                     // The generate has counted toward the plan by now, so a failed
                     // record keeps the document. While the document exists, its
@@ -199,7 +215,7 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
                     $documentNumber,
                     'invoice-' . $documentNumber,
                     $isPdf ? 'pdf' : 'xml',
-                    ['documentNumber' => $documentNumber],
+                    ['documentNumber' => $documentNumber, self::ISSUE_DATE_CONFIG => $issueDate],
                     $isPdf ? 'application/pdf' : 'application/xml',
                     $generated['bytes'],
                 ));
@@ -217,22 +233,71 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
     }
 
     /**
+     * The issue date (BT-2) is the day the document is made, as on Shopware's own
+     * invoice: the date the create dialog sends, else the clock's now. The day is
+     * taken in UTC, as Shopware stores its dates; the dialog's date picker
+     * (mt-datepicker, whose timeZone defaults to UTC) shows and returns UTC days.
+     */
+    private function issueDate(DocumentGenerateOperation $operation): string
+    {
+        $date = $operation->getConfig()['documentDate'] ?? null;
+        $at = $date === null ? $this->clock->now() : self::documentDate($date);
+
+        return $at->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d');
+    }
+
+    /**
+     * A documentDate in the shapes Shopware writes, which start with the day:
+     * the date picker's ISO 8601 string and the storage format. A day that does
+     * not exist (2026-11-31) and a relative phrase (`tomorrow`) are refused,
+     * which \DateTimeImmutable alone would roll over or work out.
+     */
+    private static function documentDate(mixed $date): \DateTimeImmutable
+    {
+        if (is_string($date) && preg_match('/^(\d{4}-\d{2}-\d{2})(?:[T ][0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?)?$/D', $date, $match) === 1) {
+            try {
+                $at = new \DateTimeImmutable($date);
+            } catch (\Exception) {
+                $at = null;
+            }
+            if ($at !== null && $at->format('Y-m-d') === $match[1]) {
+                return $at;
+            }
+        }
+
+        throw new \InvalidArgumentException('The documentDate of the beliq document is not a date: ' . json_encode($date));
+    }
+
+    /**
      * A document created again is a new invoice, not a copy: the order can change
      * between two creates. So the invoice number (BT-1) is the document's own
      * number, which is the order number for the first document and
-     * `<order>-<n>` for a later one. The order number stays the payment
-     * reference and the fallback buyer reference.
+     * `<order>-<n>` for a later one, and the issue date (BT-2) is the document's
+     * own. A later document carries the whole order again, so it corrects the
+     * earlier invoice, which is the first use EN 16931-1 names for BG-3, the
+     * preceding invoice reference: its number (BT-25), and its issue date
+     * (BT-26) when that is known. The order number stays the payment reference
+     * and the fallback buyer reference.
      *
      * @param array<string, mixed> $body
+     * @param array{number: string, issueDate: ?string}|null $preceding
      *
      * @return array<string, mixed>
      */
-    private static function withInvoiceNumber(array $body, string $number): array
+    private static function withDocumentFields(array $body, string $number, string $issueDate, ?array $preceding): array
     {
         if (!is_array($body['invoice'] ?? null)) {
             throw new \LogicException('The generate body has no invoice.');
         }
         $body['invoice']['number'] = $number;
+        $body['invoice']['issueDate'] = $issueDate;
+        if ($preceding !== null) {
+            $reference = ['id' => $preceding['number']];
+            if ($preceding['issueDate'] !== null) {
+                $reference['issueDate'] = $preceding['issueDate'];
+            }
+            $body['invoice']['precedingInvoiceReference'] = $reference;
+        }
 
         return $body;
     }

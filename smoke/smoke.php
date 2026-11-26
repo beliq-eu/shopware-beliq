@@ -12,6 +12,9 @@
 // marks a run against stub-router.php, whose documents are placeholders.
 
 const SHOP = 'http://localhost';
+// The issue date checks expect every document made today; a run that crosses
+// midnight UTC fails its last check instead of those.
+define('SMOKE_DAY', gmdate('Y-m-d'));
 const CURRENCY_EUR = 'b7d2554b0ce847cd82f3ac9bd1c0dfca';
 const SALES_CHANNEL_TYPE_STOREFRONT = '8a243080f92e4c719546314b577cf82b';
 const DOCUMENT_TYPE = 'beliq_invoice';
@@ -316,6 +319,64 @@ function checkInvoiceNumber(array $document, string $number, bool $stub, string 
         $id = (new DOMXPath($xml))->evaluate("string(/*[local-name()='CrossIndustryInvoice']/*[local-name()='ExchangedDocument']/*[local-name()='ID'] | /*[local-name()='Invoice']/*[local-name()='ID'])");
     }
     check($id === $number, 'the stored document carries ' . $number . ' as its invoice number (got ' . json_encode($id) . ')');
+}
+
+/**
+ * A beliq document's issue date (BT-2) is the day it was created, and a later
+ * document names the invoice it replaces (BG-3): BT-25, and BT-26 when that
+ * invoice's document recorded its date. A stub run reads the request; against
+ * the API, the stored XML.
+ *
+ * @param array<string, mixed> $document the document as the Admin API lists it
+ * @param array{id: string, issueDate?: string}|null $preceding
+ */
+function checkIssueDateAndPreceding(array $document, string $issueDate, ?array $preceding, bool $stub, string $baseUrl): void
+{
+    $label = json_encode(['issueDate' => $issueDate, 'precedingInvoiceReference' => $preceding]);
+    check(($document['config']['beliqIssueDate'] ?? null) === $issueDate, 'the document records ' . $issueDate . ' as its issue date (got ' . json_encode($document['config']['beliqIssueDate'] ?? null) . ')');
+    if ($stub) {
+        $invoice = stubLastGenerate($baseUrl)['invoice'] ?? [];
+        $sent = ['issueDate' => $invoice['issueDate'] ?? null, 'precedingInvoiceReference' => $invoice['precedingInvoiceReference'] ?? null];
+        check(json_encode($sent) === $label, 'the generate request carries ' . $label . ' (got ' . json_encode($sent) . ')');
+
+        return;
+    }
+    $download = http('GET', SHOP . '/api/_action/document/' . $document['id'] . '/' . $document['deepLinkCode'] . '?fileType=xml', ['Authorization: Bearer ' . adminToken()]);
+    $xml = new DOMDocument();
+    $read = null;
+    if ($download['status'] === 200 && $xml->loadXML($download['body'], LIBXML_NONET)) {
+        $read = readIssueDateAndPreceding(new DOMXPath($xml));
+    }
+    check(json_encode($read) === $label, 'the stored document carries ' . $label . ' (got ' . json_encode($read) . ')');
+}
+
+/**
+ * BT-2, BT-25 and BT-26 of a CII or UBL invoice, the dates as YYYY-MM-DD.
+ *
+ * @return array{issueDate: string, precedingInvoiceReference: array{id: string, issueDate?: string}|null}
+ */
+function readIssueDateAndPreceding(DOMXPath $xpath): array
+{
+    $text = static fn (string $path): string => trim((string) $xpath->evaluate('string(' . $path . ')'));
+    $date = static fn (string $value): string => preg_match('/^(\d{4})(\d{2})(\d{2})$/', $value, $m) === 1 ? $m[1] . '-' . $m[2] . '-' . $m[3] : $value;
+    $el = static fn (string $name): string => "*[local-name()='" . $name . "']";
+    $cii = '/' . $el('CrossIndustryInvoice');
+    $referenced = $cii . '/' . $el('SupplyChainTradeTransaction') . '/' . $el('ApplicableHeaderTradeSettlement') . '/' . $el('InvoiceReferencedDocument');
+    $ubl = '/' . $el('Invoice');
+    $billing = $ubl . '/' . $el('BillingReference') . '/' . $el('InvoiceDocumentReference');
+
+    $issueDate = $date($text($cii . '/' . $el('ExchangedDocument') . '/' . $el('IssueDateTime') . '/' . $el('DateTimeString') . ' | ' . $ubl . '/' . $el('IssueDate')));
+    $id = $text($referenced . '/' . $el('IssuerAssignedID') . ' | ' . $billing . '/' . $el('ID'));
+    $precedingDate = $date($text($referenced . '/' . $el('FormattedIssueDateTime') . '/' . $el('DateTimeString') . ' | ' . $billing . '/' . $el('IssueDate')));
+    $preceding = null;
+    if ($id !== '') {
+        $preceding = ['id' => $id];
+        if ($precedingDate !== '') {
+            $preceding['issueDate'] = $precedingDate;
+        }
+    }
+
+    return ['issueDate' => $issueDate, 'precedingInvoiceReference' => $preceding];
 }
 
 function orderCustomFields(string $orderId): array
@@ -829,6 +890,8 @@ try {
     check(count($manual) === 2, 'creating the document by hand adds a second one');
     check(($manual[1]['config']['documentNumber'] ?? null) === $firstOrder['number'] . '-2', 'the second document is numbered ' . $firstOrder['number'] . '-2');
     checkInvoiceNumber($manual[1], $firstOrder['number'] . '-2', $stub, $baseUrl);
+    // Both documents were made today, so the second names the first with its date.
+    checkIssueDateAndPreceding($manual[1], SMOKE_DAY, ['id' => $firstOrder['number'], 'issueDate' => SMOKE_DAY], $stub, $baseUrl);
 } catch (Throwable $e) {
     check(false, 'the idempotency case raised ' . $e->getMessage());
 }
@@ -848,11 +911,16 @@ try {
     ));
     check(count($second) === 1, 'the order holds ' . $firstOrder['number'] . '-2 before the delete');
     admin('DELETE', '/document/' . $second[0]['id']);
-    $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $firstOrder['id']]]);
+    // The create dialog sends its document date as `new Date().toISOString()`.
+    $create = admin('POST', '/_action/order/document/' . DOCUMENT_TYPE . '/create', [['orderId' => $firstOrder['id'], 'config' => ['documentDate' => '2026-11-20T23:30:00.000Z']]]);
     check(($create['errors'] ?? []) === [], 'the create succeeds (' . json_encode($create['errors'] ?? []) . ')');
-    $numbers = array_column(beliqDocuments($firstOrder['id']), 'documentNumber');
+    $documents = beliqDocuments($firstOrder['id']);
+    $numbers = array_column($documents, 'documentNumber');
     $n = $firstOrder['number'];
     check($numbers === [$n, $n . '-3', $n . '-4'], 'the new document is numbered ' . $n . '-4 (numbers: ' . implode(', ', $numbers) . ')');
+    if (count($documents) === 3) {
+        checkIssueDateAndPreceding($documents[2], '2026-11-20', ['id' => $n . '-3', 'issueDate' => SMOKE_DAY], $stub, $baseUrl);
+    }
 } catch (Throwable $e) {
     check(false, 'the deleted-document case raised ' . $e->getMessage());
 }
@@ -878,6 +946,8 @@ try {
     check($numbers === [$n, $n . '-3', $n . '-4', $n . '-6'], 'the new document is numbered ' . $n . '-6 (numbers: ' . implode(', ', $numbers) . ')');
     if (count($documents) === 4) {
         checkInvoiceNumber($documents[3], $n . '-6', $stub, $baseUrl);
+        // <order>-5 is the other order's invoice, so <order>-6 replaces <order>-4.
+        checkIssueDateAndPreceding($documents[3], SMOKE_DAY, ['id' => $n . '-4', 'issueDate' => '2026-11-20'], $stub, $baseUrl);
     }
 } catch (Throwable $e) {
     check(false, 'the other-order number case raised ' . $e->getMessage());
@@ -902,6 +972,8 @@ try {
     check($numbers === [$m . '-2'], 'the new document is numbered ' . $m . '-2, not ' . $m . ' again (numbers: ' . implode(', ', $numbers) . ')');
     if (count($documents) === 1) {
         checkInvoiceNumber($documents[0], $m . '-2', $stub, $baseUrl);
+        // <order>'s document is gone, and its issue date with it.
+        checkIssueDateAndPreceding($documents[0], SMOKE_DAY, ['id' => $m], $stub, $baseUrl);
     }
 
     // The issued numbers count on every order: delete <order>-2 as well, and an
@@ -976,6 +1048,8 @@ try {
 } catch (Throwable $e) {
     check(false, 'the preview case raised ' . $e->getMessage());
 }
+
+check(gmdate('Y-m-d') === SMOKE_DAY, 'the run stayed within ' . SMOKE_DAY . ' UTC, as the issue date checks assume');
 
 echo "\n";
 if ($failures === []) {

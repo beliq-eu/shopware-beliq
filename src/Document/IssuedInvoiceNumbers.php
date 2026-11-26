@@ -18,6 +18,8 @@ final class IssuedInvoiceNumbers
 {
     public const TABLE = 'beliq_invoice_number';
 
+    private const FORM_CONDITION = '`number` = :number OR `number` LIKE :prefix ESCAPE \'!\'';
+
     public function __construct(private readonly Connection $connection)
     {
     }
@@ -35,8 +37,26 @@ final class IssuedInvoiceNumbers
     {
         /** @var list<string> */
         return $this->connection->fetchFirstColumn(
-            'SELECT `number` FROM `' . self::TABLE . '` WHERE `number` = :number OR `number` LIKE :prefix ESCAPE \'!\'',
-            ['number' => $orderNumber, 'prefix' => str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $orderNumber) . '-%'],
+            'SELECT `number` FROM `' . self::TABLE . '` WHERE ' . self::FORM_CONDITION,
+            self::formParameters($orderNumber),
+        );
+    }
+
+    /**
+     * The numbers of inOrderNumberForm that were issued for this order:
+     * InvoiceDocumentLookup::precedingInvoice picks the latest of them. The form
+     * condition keeps the read on the primary key's index. A number issued
+     * before the order was renumbered (the Admin API allows it) has the old form
+     * and is not read.
+     *
+     * @return list<string>
+     */
+    public function ofOrder(string $orderId, string $orderNumber): array
+    {
+        /** @var list<string> */
+        return $this->connection->fetchFirstColumn(
+            'SELECT `number` FROM `' . self::TABLE . '` WHERE (' . self::FORM_CONDITION . ') AND `order_id` = :orderId',
+            self::formParameters($orderNumber) + ['orderId' => Uuid::fromHexToBytes($orderId)],
         );
     }
 
@@ -46,5 +66,13 @@ final class IssuedInvoiceNumbers
             'number' => $number,
             'order_id' => Uuid::fromHexToBytes($orderId),
         ]);
+    }
+
+    /**
+     * @return array{number: string, prefix: string}
+     */
+    private static function formParameters(string $orderNumber): array
+    {
+        return ['number' => $orderNumber, 'prefix' => str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $orderNumber) . '-%'];
     }
 }

@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- The issue date (BT-2) of a beliq document is the day it is created, as a UTC
+  day: the document date the Administration's create dialog sends, or the day
+  of the automatic create, as on Shopware's own invoice. Up to 0.2.13 every
+  beliq document carried the order date, also one created days after the
+  order or created again. A `documentDate` that is no date fails the create
+  before the generate call, so it does not count toward the beliq plan.
+- A beliq document after the order's first names the invoice it replaces
+  (BG-3): the order's latest earlier beliq invoice number (BT-25), also when
+  that invoice's document was deleted, and its issue date (BT-26) when its
+  document recorded one. Each beliq document records its issue date in its
+  config, `beliqIssueDate`, from this version on, so an invoice made by 0.2.13
+  or earlier is named without a date. Up to 0.2.13 a document created again did
+  not refer to the earlier invoice. The invoice type (BT-3) stays 380: cancel
+  the earlier invoice yourself.
+
 ## 0.2.13 (2026-11-25)
 
 - Each amount the plugin sends to beliq is written as its shortest decimal

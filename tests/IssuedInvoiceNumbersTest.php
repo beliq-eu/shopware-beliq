@@ -32,16 +32,35 @@ final class IssuedInvoiceNumbersTest extends TestCase
         self::assertSame([], $numbers->inOrderNumberForm('100'));
     }
 
+    public function testTheNumbersOfAnOrderAreThoseIssuedForIt(): void
+    {
+        $numbers = new IssuedInvoiceNumbers(NumberDatabase::connect());
+        $orderA1 = Uuid::randomHex();
+        $orderA12 = Uuid::randomHex();
+        $numbers->record($orderA1, 'A-1');
+        // Order A-1's second invoice has order A-1-2's first form.
+        $numbers->record($orderA1, 'A-1-2');
+        $numbers->record($orderA12, 'A-1-2-2');
+        $numbers->record($orderA12, 'A-1-2-3');
+
+        self::assertSame(['A-1', 'A-1-2'], self::sorted($numbers->ofOrder($orderA1, 'A-1')));
+        self::assertSame(['A-1-2-2', 'A-1-2-3'], self::sorted($numbers->ofOrder($orderA12, 'A-1-2')));
+        self::assertSame([], $numbers->ofOrder(Uuid::randomHex(), 'A-1'));
+    }
+
     public function testLikeWildcardsInTheOrderNumberMatchLiterally(): void
     {
         $numbers = new IssuedInvoiceNumbers(NumberDatabase::connect());
-        $numbers->record(Uuid::randomHex(), 'SWx1-2');
+        $order = Uuid::randomHex();
+        $numbers->record($order, 'SWx1-2');
         $numbers->record(Uuid::randomHex(), 'SW%1-2');
         $numbers->record(Uuid::randomHex(), 'SW!1-2');
 
         self::assertSame([], $numbers->inOrderNumberForm('SW_1'));
         self::assertSame(['SW%1-2'], $numbers->inOrderNumberForm('SW%1'));
         self::assertSame(['SW!1-2'], $numbers->inOrderNumberForm('SW!1'));
+        self::assertSame([], $numbers->ofOrder($order, 'SW_1'));
+        self::assertSame(['SWx1-2'], $numbers->ofOrder($order, 'SWx1'));
     }
 
     public function testNumbersCompareWithoutRegardToCase(): void

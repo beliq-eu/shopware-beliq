@@ -34,6 +34,7 @@ services:
             - '@Beliq\Shopware\Document\IssuedInvoiceNumbers'
             - '@lock.factory'
             - '@logger'
+            - '@Psr\Clock\ClockInterface'
             - '@Beliq\Shopware\Service\HttpClient'
         tags:
             - document.renderer
