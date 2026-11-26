@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.14 (2026-11-26)
 
 - The issue date (BT-2) of a beliq document is the day it is created, as a UTC
   day: the document date the Administration's create dialog sends, or the day
