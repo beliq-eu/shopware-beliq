@@ -64,7 +64,6 @@ final class InvoiceDocumentLookup
             new PrefixFilter('documentNumber', $orderNumber . '-'),
         ]));
 
-        $form = '/^' . preg_quote($orderNumber, '/') . '(?:-([1-9][0-9]*))?$/iuD';
         $documents = $this->documentRepository->search($criteria, $context)->getEntities();
         $numbers = $issued;
         foreach ($documents as $document) {
@@ -72,11 +71,70 @@ final class InvoiceDocumentLookup
         }
         $highest = 0;
         foreach ($numbers as $number) {
-            if ($number !== null && preg_match($form, $number, $match) === 1) {
-                $highest = max($highest, isset($match[1]) ? (int) $match[1] : 1);
-            }
+            $highest = max($highest, self::suffix($orderNumber, $number) ?? 0);
         }
 
         return $highest === 0 ? $orderNumber : $orderNumber . '-' . ($highest + 1);
+    }
+
+    /**
+     * The invoice a new beliq document on the order replaces: the order's latest
+     * beliq number, the one with the highest suffix, from the order's beliq
+     * documents and the numbers issued for the order (`$issued`). A number whose
+     * document was deleted still counts, because the buyer may hold that invoice.
+     * Null before the order's first beliq document. A number in neither of the
+     * order's forms, issued before the order was renumbered, is not named.
+     *
+     * The issue date is the one its document recorded under
+     * BeliqInvoiceRenderer::ISSUE_DATE_CONFIG, and null when there is none: a
+     * document made by 0.2.13 or earlier recorded none (its BT-2 was the order
+     * date), and a deleted document is not read.
+     *
+     * @param list<string> $issued
+     *
+     * @return array{number: string, issueDate: ?string}|null
+     */
+    public function precedingInvoice(string $orderId, string $orderNumber, array $issued, Context $context): ?array
+    {
+        $criteria = new Criteria();
+        $criteria->addFilter(new EqualsFilter('orderId', $orderId));
+        $criteria->addFilter(new EqualsFilter('documentType.technicalName', BeliqInvoiceRenderer::TYPE));
+
+        $documents = $this->documentRepository->search($criteria, $context)->getEntities();
+        // Documents first, so that on a number both hold the document's date wins.
+        $candidates = [];
+        foreach ($documents as $document) {
+            $issueDate = $document->getConfig()[BeliqInvoiceRenderer::ISSUE_DATE_CONFIG] ?? null;
+            $candidates[] = [$document->getDocumentNumber(), is_string($issueDate) ? $issueDate : null];
+        }
+        foreach ($issued as $number) {
+            $candidates[] = [$number, null];
+        }
+
+        $preceding = null;
+        $highest = 0;
+        foreach ($candidates as [$number, $issueDate]) {
+            $suffix = self::suffix($orderNumber, $number);
+            if ($number !== null && $suffix !== null && $suffix > $highest) {
+                $highest = $suffix;
+                $preceding = ['number' => $number, 'issueDate' => $issueDate];
+            }
+        }
+
+        return $preceding;
+    }
+
+    /**
+     * The suffix of a number in one of the order's two forms, the order number
+     * counting as 1, and null for any other number. The match ignores case, as
+     * Shopware's duplicate check does under MySQL's default collation.
+     */
+    private static function suffix(string $orderNumber, ?string $number): ?int
+    {
+        if ($number === null || preg_match('/^' . preg_quote($orderNumber, '/') . '(?:-([1-9][0-9]*))?$/iuD', $number, $match) !== 1) {
+            return null;
+        }
+
+        return isset($match[1]) ? (int) $match[1] : 1;
     }
 }

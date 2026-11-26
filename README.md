@@ -168,12 +168,17 @@ document again from the Documents tab adds one numbered `<order number>-<n>`,
 with n one more than the highest such number held by a beliq document of any
 order or issued before on any order, compared without regard to case. That
 document is a new invoice, not a copy: its invoice number (BT-1) is its
-document number, and its lines show
-the order as it is when you create it. Its issue date (BT-2) stays the order
-date, as for the first document, and it does not refer to the earlier
-invoice, so the buyer then holds two invoices for one order. Cancel the
-earlier one yourself if the new one replaces it. With a bank account set, the
-payment reference stays the order number.
+document number, and its lines show the order as it is when you create it. It
+names the order's latest earlier beliq invoice as the invoice it replaces
+(BT-25), also when you deleted that invoice's document, with that invoice's
+issue date (BT-26) when its document recorded one. Each document records its
+issue date from version 0.2.14 on. The invoice type (BT-3) stays 380, so the
+buyer then holds two invoices for one order: cancel the earlier one yourself.
+With a bank account set, the payment reference stays the order number.
+
+The issue date (BT-2) of each beliq document is the day it is created, as a
+UTC day: the document date of the create dialog, or the day of the automatic
+create. It is not the order date.
 
 The plugin records each number it issues in its own table, so a number stays
 used on every order after you delete its document: the buyer may hold that

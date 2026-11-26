@@ -2,6 +2,7 @@
 
 namespace Beliq\Shopware\Tests;
 
+use Beliq\Shopware\Document\BeliqInvoiceRenderer;
 use Beliq\Shopware\Document\InvoiceDocumentLookup;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Document\DocumentCollection;
@@ -101,6 +102,64 @@ final class InvoiceDocumentLookupTest extends TestCase
         self::assertSame('10000', $this->nextNumber('10000', [], [], ['10000', '10000-2']));
     }
 
+    public function testThePrecedingInvoiceIsTheOrdersHighestNumber(): void
+    {
+        self::assertNull($this->precedingInvoice('10000', []));
+        self::assertSame(['number' => '10000', 'issueDate' => null], $this->precedingInvoice('10000', ['10000']));
+        self::assertSame(
+            ['number' => '10000-10', 'issueDate' => '2026-11-24'],
+            $this->precedingInvoice('10000', ['10000-10', '10000-9', '10000'], ['10000-10' => '2026-11-24', '10000-9' => '2026-11-23']),
+        );
+    }
+
+    public function testThePrecedingInvoiceIsAnIssuedNumberAboveTheDocuments(): void
+    {
+        // 10000-2 was deleted: its number counts, its date is gone.
+        self::assertSame(
+            ['number' => '10000-2', 'issueDate' => null],
+            $this->precedingInvoice('10000', ['10000'], ['10000' => '2026-11-20'], issued: ['10000', '10000-2']),
+        );
+        // A number both hold takes the document's date.
+        self::assertSame(
+            ['number' => '10000', 'issueDate' => '2026-11-20'],
+            $this->precedingInvoice('10000', ['10000'], ['10000' => '2026-11-20'], issued: ['10000']),
+        );
+    }
+
+    public function testThePrecedingInvoiceIsOnlyTheOrdersOwnBeliqDocument(): void
+    {
+        // Order A-1's A-1-2, Shopware's own invoice, and numbers the plugin never
+        // hands out are not this order's beliq invoices.
+        self::assertNull($this->precedingInvoice('A-1-2', [], otherOrders: ['A-1-2', 'A-1-2-2'], otherTypes: ['A-1-2']));
+        self::assertNull($this->precedingInvoice('100', ['R-2026-1', '1000-5', '100-0', '100-02', '100-2a']));
+        // The match ignores case, as the number does.
+        self::assertSame(['number' => 'sw-1-2', 'issueDate' => null], $this->precedingInvoice('SW-1', ['SW-1', 'sw-1-2']));
+    }
+
+    public function testANumericOrderNumberIsMatchedAsAString(): void
+    {
+        // A numeric string used as an array key turns into an int.
+        self::assertSame(['number' => '10000-2', 'issueDate' => '2026-11-24'], $this->precedingInvoice('10000', ['10000-2'], ['10000-2' => '2026-11-24']));
+        self::assertSame(['number' => '10000', 'issueDate' => '2026-11-24'], $this->precedingInvoice('10000', ['10000'], ['10000' => '2026-11-24']));
+    }
+
+    /**
+     * @param list<string> $numbers beliq documents on the order
+     * @param array<string, string> $issueDates by number, the issue date a beliq document on the order recorded
+     * @param list<string> $otherOrders beliq documents on other orders
+     * @param list<string> $otherTypes documents of another type on the order
+     * @param list<string> $issued numbers issued for the order
+     *
+     * @return array{number: string, issueDate: ?string}|null
+     */
+    private function precedingInvoice(string $orderNumber, array $numbers, array $issueDates = [], array $otherOrders = [], array $otherTypes = [], array $issued = []): ?array
+    {
+        $orderId = Uuid::randomHex();
+
+        return $this->lookup($orderId, $numbers, $otherOrders, $otherTypes, $issueDates)
+            ->precedingInvoice($orderId, $orderNumber, $issued, Context::createDefaultContext());
+    }
+
     /**
      * @param list<string> $numbers beliq documents on the order
      * @param list<string> $otherOrders beliq documents on other orders
@@ -109,7 +168,18 @@ final class InvoiceDocumentLookupTest extends TestCase
      */
     private function nextNumber(string $orderNumber, array $numbers, array $otherOrders = [], array $otherTypes = [], array $issued = []): string
     {
-        $orderId = Uuid::randomHex();
+        return $this->lookup(Uuid::randomHex(), $numbers, $otherOrders, $otherTypes)
+            ->nextNumber($orderNumber, $issued, Context::createDefaultContext());
+    }
+
+    /**
+     * @param list<string> $numbers
+     * @param list<string> $otherOrders
+     * @param list<string> $otherTypes
+     * @param array<string, string> $issueDates
+     */
+    private function lookup(string $orderId, array $numbers, array $otherOrders, array $otherTypes, array $issueDates = []): InvoiceDocumentLookup
+    {
         $documents = [];
         foreach ([[$numbers, $orderId, 'beliq_invoice'], [$otherOrders, Uuid::randomHex(), 'beliq_invoice'], [$otherTypes, $orderId, 'invoice']] as [$list, $documentOrderId, $type]) {
             foreach ($list as $number) {
@@ -119,7 +189,7 @@ final class InvoiceDocumentLookupTest extends TestCase
 
         $repository = $this->createMock(EntityRepository::class);
         $repository->method('search')->willReturnCallback(
-            static function (Criteria $criteria, Context $context) use ($documents): EntitySearchResult {
+            static function (Criteria $criteria, Context $context) use ($documents, $orderId, $issueDates): EntitySearchResult {
                 $entities = [];
                 foreach ($documents as $fields) {
                     foreach ($criteria->getFilters() as $filter) {
@@ -132,6 +202,11 @@ final class InvoiceDocumentLookupTest extends TestCase
                     $document->setUniqueIdentifier($document->getId());
                     $document->setOrderId($fields['orderId']);
                     $document->setDocumentNumber($fields['documentNumber']);
+                    $config = ['documentNumber' => $fields['documentNumber']];
+                    if ($fields['documentType.technicalName'] === BeliqInvoiceRenderer::TYPE && $fields['orderId'] === $orderId && isset($issueDates[$fields['documentNumber']])) {
+                        $config[BeliqInvoiceRenderer::ISSUE_DATE_CONFIG] = $issueDates[$fields['documentNumber']];
+                    }
+                    $document->setConfig($config);
                     $entities[] = $document;
                 }
 
@@ -139,7 +214,7 @@ final class InvoiceDocumentLookupTest extends TestCase
             },
         );
 
-        return (new InvoiceDocumentLookup($repository))->nextNumber($orderNumber, $issued, Context::createDefaultContext());
+        return new InvoiceDocumentLookup($repository);
     }
 
     /**

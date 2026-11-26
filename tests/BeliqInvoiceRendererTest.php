@@ -12,8 +12,10 @@ use Beliq\Shopware\Service\InvoiceMapper;
 use Beliq\Shopware\Service\OrderAdapter;
 use Beliq\Shopware\Tests\Support\FakeHttpClient;
 use Beliq\Shopware\Tests\Support\NumberDatabase;
+use Beliq\Shopware\Tests\Support\TestClock;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
+use Psr\Clock\ClockInterface;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -42,6 +44,7 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\Currency\CurrencyEntity;
@@ -64,6 +67,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
  */
 final class BeliqInvoiceRendererTest extends TestCase
 {
+    /** 2026-11-26 23:30 UTC, the clock of every test that sets none. */
+    private const NOW = 1795735800;
+
     public function testBusinessOrderProducesAnXmlDocumentFromTheApiBytes(): void
     {
         $bytes = '<?xml version="1.0"?><Invoice>beliq</Invoice>';
@@ -91,6 +97,130 @@ final class BeliqInvoiceRendererTest extends TestCase
         $sent = json_decode($call['body'], true);
         self::assertSame('zugferd', $sent['standard']);
         self::assertSame('SW10042', $sent['invoice']['number']);
+        // The order's first beliq document replaces no invoice.
+        self::assertArrayNotHasKey('precedingInvoiceReference', $sent['invoice']);
+    }
+
+    public function testTheIssueDateIsTheDayOfTheDocumentDateTheCreateDialogSends(): void
+    {
+        $order = $this->businessOrder('SW10042');
+        $sent = [];
+        // The Administration's create dialog sends `new Date().toISOString()`. An
+        // offset is converted: 00:30 at +01:00 is still the 26th in UTC.
+        foreach (['2026-11-25T08:15:00.000Z', '2026-11-27T00:30:00+01:00'] as $documentDate) {
+            $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+            $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+                ->render([$order->getId() => $this->operation($order->getId(), 'xml', ['documentDate' => $documentDate])], Context::createDefaultContext(), new DocumentRendererConfig());
+            $sent[] = [
+                json_decode((string) $http->lastCall()['body'], true)['invoice']['issueDate'],
+                $result->getOrderSuccess($order->getId())?->getConfig()[BeliqInvoiceRenderer::ISSUE_DATE_CONFIG] ?? null,
+            ];
+        }
+
+        // Not the order date (2026-06-30), and not the clock's day.
+        self::assertSame([['2026-11-25', '2026-11-25'], ['2026-11-26', '2026-11-26']], $sent);
+    }
+
+    public function testWithoutADocumentDateTheIssueDateIsTheUtcDayOfTheCreate(): void
+    {
+        // The automatic create sends no document date. A clock in another time
+        // zone still gives the UTC day.
+        $clock = new class implements ClockInterface {
+            public function now(): \DateTimeImmutable
+            {
+                return new \DateTimeImmutable('2026-11-27 00:30:00', new \DateTimeZone('Europe/Berlin'));
+            }
+        };
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, clock: $clock)
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('2026-11-26', json_decode((string) $http->lastCall()['body'], true)['invoice']['issueDate']);
+        self::assertSame('2026-11-26', $result->getOrderSuccess($order->getId())?->getConfig()[BeliqInvoiceRenderer::ISSUE_DATE_CONFIG] ?? null);
+    }
+
+    public function testADocumentDateThatIsNoDateFailsBeforeTheGenerate(): void
+    {
+        $order = $this->businessOrder('SW10042');
+        foreach (['31.11.2026 Uhr', 1795735800, ''] as $documentDate) {
+            $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+            $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
+                ->render([$order->getId() => $this->operation($order->getId(), 'xml', ['documentDate' => $documentDate])], Context::createDefaultContext(), new DocumentRendererConfig());
+
+            self::assertNotNull($result->getOrderError($order->getId()), var_export($documentDate, true));
+            self::assertSame([], $http->calls, 'no billed generate for ' . var_export($documentDate, true));
+        }
+    }
+
+    public function testARegenerateNamesTheInvoiceItReplacesWithThatInvoicesIssueDate(): void
+    {
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+
+        $result = $this->renderer(
+            $order,
+            $this->config('zugferd', 'xml'),
+            $http,
+            existingNumbers: ['SW10042-2', 'SW10042'],
+            issueDates: ['SW10042' => '2026-11-20', 'SW10042-2' => '2026-11-24'],
+        )->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('SW10042-3', $result->getOrderSuccess($order->getId())?->getNumber());
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertSame(['id' => 'SW10042-2', 'issueDate' => '2026-11-24'], $sent['invoice']['precedingInvoiceReference'] ?? null);
+        self::assertSame('2026-11-26', $sent['invoice']['issueDate']);
+    }
+
+    public function testAnInvoiceThatRecordedNoIssueDateIsNamedWithoutOne(): void
+    {
+        // A document made by 0.2.13 or earlier recorded no issue date, and its
+        // BT-2 was the order date, not the day it was made.
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+
+        $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingNumbers: ['SW10042'])
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertSame(['id' => 'SW10042'], $sent['invoice']['precedingInvoiceReference'] ?? null);
+    }
+
+    public function testAnInvoiceWhoseDocumentWasDeletedIsNamedWithoutItsIssueDate(): void
+    {
+        // SW10042-2 was issued and its document deleted: the buyer may hold it, so
+        // the next invoice replaces it. Its date went with the document.
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('SW10042');
+        $numbers = NumberDatabase::connect();
+        $issued = new IssuedInvoiceNumbers($numbers);
+        $issued->record($order->getId(), 'SW10042');
+        $issued->record($order->getId(), 'SW10042-2');
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, existingNumbers: ['SW10042'], numbers: $numbers, issueDates: ['SW10042' => '2026-11-20'])
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('SW10042-3', $result->getOrderSuccess($order->getId())?->getNumber());
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertSame(['id' => 'SW10042-2'], $sent['invoice']['precedingInvoiceReference'] ?? null);
+    }
+
+    public function testAnotherOrdersNumberInThisOrdersFormIsNotNamedAsTheInvoiceReplaced(): void
+    {
+        // Order A-1 issued A-1-2 for its second document and holds a document
+        // under it. Order A-1-2's first document takes A-1-2-2 and replaces nothing.
+        $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
+        $order = $this->businessOrder('A-1-2');
+        $numbers = NumberDatabase::connect();
+        (new IssuedInvoiceNumbers($numbers))->record(Uuid::randomHex(), 'A-1-2');
+
+        $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http, numbers: $numbers, otherOrders: ['A-1', 'A-1-2'], issueDates: ['A-1-2' => '2026-11-20'])
+            ->render([$order->getId() => $this->operation($order->getId(), 'xml')], Context::createDefaultContext(), new DocumentRendererConfig());
+
+        self::assertSame('A-1-2-2', $result->getOrderSuccess($order->getId())?->getNumber());
+        $sent = json_decode((string) $http->lastCall()['body'], true);
+        self::assertArrayNotHasKey('precedingInvoiceReference', $sent['invoice']);
     }
 
     public function testPdfContentTypeYieldsAPdfDocument(): void
@@ -206,6 +336,12 @@ final class BeliqInvoiceRendererTest extends TestCase
 
         self::assertSame(['SW10042', 'SW10042-2'], $created);
         self::assertSame(['SW10042', 'SW10042-2'], array_column(self::issuedRows($numbers), 'number'));
+        // The first document is not stored yet, so its issue date is not known.
+        $references = array_map(
+            static fn (array $call): mixed => json_decode((string) $call['body'], true)['invoice']['precedingInvoiceReference'] ?? null,
+            $http->calls,
+        );
+        self::assertSame([null, ['id' => 'SW10042']], $references);
     }
 
     public function testTheOrdersNumberLockIsHeldThroughTheGenerateCall(): void
@@ -616,6 +752,8 @@ final class BeliqInvoiceRendererTest extends TestCase
      * @param list<string> $existingNumbers numbers of the beliq documents already on the order
      * @param EntityRepository<OrderCollection>|null $orderRepository
      * @param list<array{0: string, 1: string}> $shipped delivery id and time of each move from open to shipped
+     * @param array<string, string> $issueDates by number, the issue date a beliq document recorded
+     * @param list<string> $otherOrders numbers of beliq documents on other orders
      */
     private function renderer(
         OrderEntity $order,
@@ -627,6 +765,9 @@ final class BeliqInvoiceRendererTest extends TestCase
         ?LockFactory $locks = null,
         ?Connection $numbers = null,
         ?LoggerInterface $logger = null,
+        array $issueDates = [],
+        array $otherOrders = [],
+        ?ClockInterface $clock = null,
     ): BeliqInvoiceRenderer {
         if ($orderRepository === null) {
             $orderRepository = $this->createMock(EntityRepository::class);
@@ -647,11 +788,12 @@ final class BeliqInvoiceRendererTest extends TestCase
             $configProvider,
             new OrderAdapter(),
             new InvoiceMapper(),
-            $this->lookup($existingNumbers),
+            $this->lookup($order->getId(), $existingNumbers, $issueDates, $otherOrders),
             $this->shippedDates($shipped),
             new IssuedInvoiceNumbers($numbers ?? NumberDatabase::connect()),
             $locks ?? new LockFactory(new InMemoryStore()),
             $logger ?? new NullLogger(),
+            $clock ?? new TestClock(self::NOW),
             $http,
         );
     }
@@ -749,29 +891,46 @@ final class BeliqInvoiceRendererTest extends TestCase
     }
 
     /**
-     * @param list<string> $numbers
+     * beliq documents, read as the DAL reads them for the order filter only. The
+     * number filters are left to InvoiceDocumentLookupTest.
+     *
+     * @param list<string> $numbers beliq documents on the order
+     * @param array<string, string> $issueDates by number, the issue date a document recorded
+     * @param list<string> $otherOrders beliq documents on another order
      */
-    private function lookup(array $numbers): InvoiceDocumentLookup
+    private function lookup(string $orderId, array $numbers, array $issueDates = [], array $otherOrders = []): InvoiceDocumentLookup
     {
         $documents = [];
-        foreach ($numbers as $number) {
-            $document = new DocumentEntity();
-            $document->setId(Uuid::randomHex());
-            $document->setUniqueIdentifier($document->getId());
-            $document->setDocumentNumber($number);
-            $documents[] = $document;
+        foreach ([[$numbers, $orderId], [$otherOrders, Uuid::randomHex()]] as [$list, $documentOrderId]) {
+            foreach ($list as $number) {
+                $document = new DocumentEntity();
+                $document->setId(Uuid::randomHex());
+                $document->setUniqueIdentifier($document->getId());
+                $document->setOrderId($documentOrderId);
+                $document->setDocumentNumber($number);
+                $config = ['documentNumber' => $number];
+                if (isset($issueDates[$number])) {
+                    $config[BeliqInvoiceRenderer::ISSUE_DATE_CONFIG] = $issueDates[$number];
+                }
+                $document->setConfig($config);
+                $documents[] = $document;
+            }
         }
 
         $documentRepository = $this->createMock(EntityRepository::class);
         $documentRepository->method('search')->willReturnCallback(
-            static fn (Criteria $criteria, Context $context): EntitySearchResult => new EntitySearchResult(
-                'document',
-                count($documents),
-                new DocumentCollection($documents),
-                null,
-                $criteria,
-                $context,
-            ),
+            static function (Criteria $criteria, Context $context) use ($documents): EntitySearchResult {
+                foreach ($criteria->getFilters() as $filter) {
+                    if ($filter instanceof EqualsFilter && $filter->getField() === 'orderId') {
+                        $documents = array_values(array_filter(
+                            $documents,
+                            static fn (DocumentEntity $document): bool => $document->getOrderId() === $filter->getValue(),
+                        ));
+                    }
+                }
+
+                return new EntitySearchResult('document', count($documents), new DocumentCollection($documents), null, $criteria, $context);
+            },
         );
 
         return new InvoiceDocumentLookup($documentRepository);
@@ -801,9 +960,12 @@ final class BeliqInvoiceRendererTest extends TestCase
         );
     }
 
-    private function operation(string $orderId, string $fileType): DocumentGenerateOperation
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function operation(string $orderId, string $fileType, array $config = []): DocumentGenerateOperation
     {
-        return new DocumentGenerateOperation($orderId, $fileType);
+        return new DocumentGenerateOperation($orderId, $fileType, $config);
     }
 
     /**
