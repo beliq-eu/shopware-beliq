@@ -12,6 +12,9 @@
 // marks a run against stub-router.php, whose documents are placeholders.
 
 const SHOP = 'http://localhost';
+// The issue date checks expect every document made today; a run that crosses
+// midnight UTC fails its last check instead of those.
+define('SMOKE_DAY', gmdate('Y-m-d'));
 const CURRENCY_EUR = 'b7d2554b0ce847cd82f3ac9bd1c0dfca';
 const SALES_CHANNEL_TYPE_STOREFRONT = '8a243080f92e4c719546314b577cf82b';
 const DOCUMENT_TYPE = 'beliq_invoice';
@@ -888,7 +891,7 @@ try {
     check(($manual[1]['config']['documentNumber'] ?? null) === $firstOrder['number'] . '-2', 'the second document is numbered ' . $firstOrder['number'] . '-2');
     checkInvoiceNumber($manual[1], $firstOrder['number'] . '-2', $stub, $baseUrl);
     // Both documents were made today, so the second names the first with its date.
-    checkIssueDateAndPreceding($manual[1], gmdate('Y-m-d'), ['id' => $firstOrder['number'], 'issueDate' => gmdate('Y-m-d')], $stub, $baseUrl);
+    checkIssueDateAndPreceding($manual[1], SMOKE_DAY, ['id' => $firstOrder['number'], 'issueDate' => SMOKE_DAY], $stub, $baseUrl);
 } catch (Throwable $e) {
     check(false, 'the idempotency case raised ' . $e->getMessage());
 }
@@ -916,7 +919,7 @@ try {
     $n = $firstOrder['number'];
     check($numbers === [$n, $n . '-3', $n . '-4'], 'the new document is numbered ' . $n . '-4 (numbers: ' . implode(', ', $numbers) . ')');
     if (count($documents) === 3) {
-        checkIssueDateAndPreceding($documents[2], '2026-11-20', ['id' => $n . '-3', 'issueDate' => gmdate('Y-m-d')], $stub, $baseUrl);
+        checkIssueDateAndPreceding($documents[2], '2026-11-20', ['id' => $n . '-3', 'issueDate' => SMOKE_DAY], $stub, $baseUrl);
     }
 } catch (Throwable $e) {
     check(false, 'the deleted-document case raised ' . $e->getMessage());
@@ -944,7 +947,7 @@ try {
     if (count($documents) === 4) {
         checkInvoiceNumber($documents[3], $n . '-6', $stub, $baseUrl);
         // <order>-5 is the other order's invoice, so <order>-6 replaces <order>-4.
-        checkIssueDateAndPreceding($documents[3], gmdate('Y-m-d'), ['id' => $n . '-4', 'issueDate' => '2026-11-20'], $stub, $baseUrl);
+        checkIssueDateAndPreceding($documents[3], SMOKE_DAY, ['id' => $n . '-4', 'issueDate' => '2026-11-20'], $stub, $baseUrl);
     }
 } catch (Throwable $e) {
     check(false, 'the other-order number case raised ' . $e->getMessage());
@@ -970,7 +973,7 @@ try {
     if (count($documents) === 1) {
         checkInvoiceNumber($documents[0], $m . '-2', $stub, $baseUrl);
         // <order>'s document is gone, and its issue date with it.
-        checkIssueDateAndPreceding($documents[0], gmdate('Y-m-d'), ['id' => $m], $stub, $baseUrl);
+        checkIssueDateAndPreceding($documents[0], SMOKE_DAY, ['id' => $m], $stub, $baseUrl);
     }
 
     // The issued numbers count on every order: delete <order>-2 as well, and an
@@ -1045,6 +1048,8 @@ try {
 } catch (Throwable $e) {
     check(false, 'the preview case raised ' . $e->getMessage());
 }
+
+check(gmdate('Y-m-d') === SMOKE_DAY, 'the run stayed within ' . SMOKE_DAY . ' UTC, as the issue date checks assume');
 
 echo "\n";
 if ($failures === []) {

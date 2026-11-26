@@ -235,20 +235,37 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
     /**
      * The issue date (BT-2) is the day the document is made, as on Shopware's own
      * invoice: the date the create dialog sends, else the clock's now. The day is
-     * taken in UTC, as Shopware stores its dates.
+     * taken in UTC, as Shopware stores its dates; the dialog's date picker
+     * (mt-datepicker, whose timeZone defaults to UTC) shows and returns UTC days.
      */
     private function issueDate(DocumentGenerateOperation $operation): string
     {
         $date = $operation->getConfig()['documentDate'] ?? null;
-        if ($date === null) {
-            $at = $this->clock->now();
-        } elseif (is_string($date) && $date !== '') {
-            $at = new \DateTimeImmutable($date);
-        } else {
-            throw new \InvalidArgumentException('The documentDate of the beliq document is not a date.');
-        }
+        $at = $date === null ? $this->clock->now() : self::documentDate($date);
 
         return $at->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d');
+    }
+
+    /**
+     * A documentDate in the shapes Shopware writes, which start with the day:
+     * the date picker's ISO 8601 string and the storage format. A day that does
+     * not exist (2026-11-31) and a relative phrase (`tomorrow`) are refused,
+     * which \DateTimeImmutable alone would roll over or work out.
+     */
+    private static function documentDate(mixed $date): \DateTimeImmutable
+    {
+        if (is_string($date) && preg_match('/^(\d{4}-\d{2}-\d{2})(?:[T ][0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?)?$/D', $date, $match) === 1) {
+            try {
+                $at = new \DateTimeImmutable($date);
+            } catch (\Exception) {
+                $at = null;
+            }
+            if ($at !== null && $at->format('Y-m-d') === $match[1]) {
+                return $at;
+            }
+        }
+
+        throw new \InvalidArgumentException('The documentDate of the beliq document is not a date: ' . json_encode($date));
     }
 
     /**
@@ -256,9 +273,11 @@ final class BeliqInvoiceRenderer extends AbstractDocumentRenderer
      * between two creates. So the invoice number (BT-1) is the document's own
      * number, which is the order number for the first document and
      * `<order>-<n>` for a later one, and the issue date (BT-2) is the document's
-     * own. A later document names the invoice it replaces (BG-3): its number
-     * (BT-25), and its issue date (BT-26) when that is known. The order number
-     * stays the payment reference and the fallback buyer reference.
+     * own. A later document carries the whole order again, so it corrects the
+     * earlier invoice, which is the first use EN 16931-1 names for BG-3, the
+     * preceding invoice reference: its number (BT-25), and its issue date
+     * (BT-26) when that is known. The order number stays the payment reference
+     * and the fallback buyer reference.
      *
      * @param array<string, mixed> $body
      * @param array{number: string, issueDate: ?string}|null $preceding

@@ -83,7 +83,11 @@ final class InvoiceDocumentLookup
      * documents and the numbers issued for the order (`$issued`). A number whose
      * document was deleted still counts, because the buyer may hold that invoice.
      * Null before the order's first beliq document. A number in neither of the
-     * order's forms, issued before the order was renumbered, is not named.
+     * order's forms, issued before the order was renumbered, is not named. A
+     * number recorded for a create whose document Shopware then failed to store
+     * is named too, though the buyer never got that invoice: the renderer
+     * records the number before Shopware stores the document, so the two look
+     * the same here.
      *
      * The issue date is the one its document recorded under
      * BeliqInvoiceRenderer::ISSUE_DATE_CONFIG, and null when there is none: a

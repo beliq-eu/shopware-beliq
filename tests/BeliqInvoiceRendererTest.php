@@ -105,9 +105,10 @@ final class BeliqInvoiceRendererTest extends TestCase
     {
         $order = $this->businessOrder('SW10042');
         $sent = [];
-        // The Administration's create dialog sends `new Date().toISOString()`. An
-        // offset is converted: 00:30 at +01:00 is still the 26th in UTC.
-        foreach (['2026-11-25T08:15:00.000Z', '2026-11-27T00:30:00+01:00'] as $documentDate) {
+        // The Administration's create dialog sends `new Date().toISOString()`, and
+        // Shopware's storage format has no zone. An offset is converted: 00:30 at
+        // +01:00 is still the 26th in UTC.
+        foreach (['2026-11-25T08:15:00.000Z', '2026-11-24 10:00:00.000', '2026-11-27T00:30:00+01:00'] as $documentDate) {
             $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
             $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
                 ->render([$order->getId() => $this->operation($order->getId(), 'xml', ['documentDate' => $documentDate])], Context::createDefaultContext(), new DocumentRendererConfig());
@@ -118,7 +119,7 @@ final class BeliqInvoiceRendererTest extends TestCase
         }
 
         // Not the order date (2026-06-30), and not the clock's day.
-        self::assertSame([['2026-11-25', '2026-11-25'], ['2026-11-26', '2026-11-26']], $sent);
+        self::assertSame([['2026-11-25', '2026-11-25'], ['2026-11-24', '2026-11-24'], ['2026-11-26', '2026-11-26']], $sent);
     }
 
     public function testWithoutADocumentDateTheIssueDateIsTheUtcDayOfTheCreate(): void
@@ -144,7 +145,8 @@ final class BeliqInvoiceRendererTest extends TestCase
     public function testADocumentDateThatIsNoDateFailsBeforeTheGenerate(): void
     {
         $order = $this->businessOrder('SW10042');
-        foreach (['31.11.2026 Uhr', 1795735800, ''] as $documentDate) {
+        // PHP rolls 2026-11-31 over to 1 December and works out `tomorrow`.
+        foreach (['2026-11-31', '2026-11-30T24:30:00Z', 'tomorrow', '31.11.2026', 1795735800, ''] as $documentDate) {
             $http = new FakeHttpClient(['status' => 200, 'body' => '<x/>', 'headers' => ['content-type' => 'application/xml']]);
             $result = $this->renderer($order, $this->config('zugferd', 'xml'), $http)
                 ->render([$order->getId() => $this->operation($order->getId(), 'xml', ['documentDate' => $documentDate])], Context::createDefaultContext(), new DocumentRendererConfig());
